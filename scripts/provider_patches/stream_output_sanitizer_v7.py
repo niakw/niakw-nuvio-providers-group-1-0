@@ -9,7 +9,10 @@ that private exact-URL marker, requires a non-direct player-shaped URL, keeps th
 row without a second destructive probe, and strips the private marker before the
 row escapes the sanitizer.
 
-This does not whitelist hosts, providers, catalogue/detail pages or direct media.
+Known application-shell media is rejected before any proof marker is considered.
+A fixed browser/app fallback asset is not content merely because it is a playable
+MP4. This does not whitelist or blacklist provider catalogues; it excludes exact
+infrastructure fallback paths whose bytes are independent of the requested work.
 """
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ CHECK_V6 = (
     "if(!item.probe)return config.probeAllUrls?null:clearCoreMediaProof(item.stream);"
 )
 CHECK_V7 = (
+    "if(genericAppShellMedia(item.url))return null;"
     "if(correlatedPlayerFallback(item.stream,item.url))return clearPrivateProofs(item.stream);"
     "if(coreMediaProof(item.stream,item.url))return clearPrivateProofs(item.stream);"
     "if(!item.probe)return config.probeAllUrls?null:clearPrivateProofs(item.stream);"
@@ -35,6 +39,15 @@ VERDICT_V6 = "return verdict===false?null:clearCoreMediaProof(item.stream);"
 VERDICT_V7 = "return verdict===false?null:clearPrivateProofs(item.stream);"
 HELPER_ANCHOR = "  function coreMediaProof(stream,url){\n"
 HELPERS = r'''  /* NUVIO_STREAM_OUTPUT_CORRELATED_PLAYER_FALLBACK_V7 */
+  function genericAppShellMedia(url){
+    try{
+      var parsed=new URL(String(url||""));
+      var host=String(parsed.hostname||"").toLowerCase();
+      var path=String(parsed.pathname||"").toLowerCase().replace(/\/+$/,"");
+      if(host==="web.telegram.org"&&(path==="/a/nojs.mp4"||path==="/k/nojs.mp4"))return true;
+    }catch(_e){}
+    return false;
+  }
   function correlatedPlayerFallback(stream,url){
     if(!stream||typeof stream!=="object"||isDirect(stream,url))return false;
     var proof=stream.__nuvioCorrelatedPlayerFallbackV1;
@@ -94,10 +107,14 @@ def validate(text: str) -> None:
     if text.count(MARKER) != 1:
         raise ValueError(f"stream sanitizer v7 marker count={text.count(MARKER)}")
     for needle in (
+        "function genericAppShellMedia(url)",
+        'host===\"web.telegram.org\"',
+        'path===\"/a/nojs.mp4\"',
         "function correlatedPlayerFallback(stream,url)",
         "function clearPrivateProofs(stream)",
         "String(proof.url||\"\")!==String(url||\"\")",
         "if(!stream||typeof stream!==\"object\"||isDirect(stream,url))return false;",
+        "if(genericAppShellMedia(item.url))return null;",
         "if(correlatedPlayerFallback(item.stream,item.url))return clearPrivateProofs(item.stream);",
         "return verdict===false?null:clearPrivateProofs(item.stream);",
         "delete stream.__nuvioCorrelatedPlayerFallbackV1",

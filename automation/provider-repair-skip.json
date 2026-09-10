@@ -1,17 +1,29 @@
 {
-  "schemaVersion": 1,
-  "policy": "skip providers already proven functional/corrected during portfolio repair; global non-network regressions still apply",
-  "baseline": "5.21.37 + route-proof candidate run 34124189951; PlayIMDb repaired by targeted run 34147372929",
+  "schemaVersion": 2,
+  "policy": "Skip only providers whose entire declared capability surface is currently live-proven on the exact locked published bundle. Partial green lanes are protected by provider-live-baseline-locks.json but the provider remains repair-eligible for its unresolved lanes.",
+  "baseline": "5.21.37 exact published bytes + 2026-09-09 current field/published-byte evidence",
+  "sourceOfTruth": "automation/provider-live-baseline-locks.json",
   "providers": {
-    "allwish": {"reason": "quick-yield playable+verified"},
-    "anime-sama": {"reason": "quick-yield playable+verified; anime live positive"},
-    "castle": {"reason": "quick-yield playable+verified; Interstellar positive"},
-    "hindmoviez": {"reason": "quick-yield playable+verified; Interstellar positive"},
-    "kehflix": {"reason": "quick-yield playable+verified; Interstellar/HOTD positive; V29 regression protected"},
-    "neko-sama": {"reason": "quick-yield playable; anime live positive"},
-    "playimdb": {"reason": "V6 targeted repair run 34147372929 raw+playable+verified; movie+tv upstream-positive pairs preserved 2/2"},
-    "streamzo": {"reason": "quick-yield playable+verified; Interstellar positive"},
-    "videasy": {"reason": "quick-yield playable+verified; Interstellar positive"},
-    "wookafr": {"reason": "quick-yield playable+verified; Interstellar positive"}
+    "castle": {
+      "bundle": "providers/castle--nuvio--5f92106210cec916.js",
+      "verifiedLanes": ["movie", "tv"],
+      "reason": "current TV field evidence proves both declared canonical lanes on exact published bytes"
+    },
+    "persianstremio": {
+      "bundle": "providers/persianstremio--nuvio--0d5ef668a8d05840.js",
+      "verifiedLanes": ["movie", "tv"],
+      "reason": "current published-byte guard and TV field evidence prove both declared canonical lanes"
+    }
+  },
+  "retiredProviderWideHints": {
+    "allwish": "historical quick-yield only; no current full-capability proof",
+    "anime-sama": "anime lane protected, other declared lanes remain repair-eligible",
+    "hindmoviez": "movie lane protected, TV remains unresolved",
+    "kehflix": "current regression; stale historical green must not suppress repair",
+    "neko-sama": "historical/candidate green is not current full-capability proof",
+    "playimdb": "targeted candidate proof is not current published full-capability proof",
+    "streamzo": "movie lane protected; TV currently wrong-content and remains repair-eligible",
+    "videasy": "historical quick-yield only; no current full-capability proof",
+    "wookafr": "historical quick-yield only; no current full-capability proof"
   }
 }

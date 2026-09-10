@@ -83,10 +83,9 @@ function isAnimeFocusedCatalogue(candidate) {
 /**
  * Infer the catalogue coverage of one manifest entry.
  *
- * Anime catalogues expose both anime episodes and anime films. Therefore an
- * anime-only description maps to the anime and movie request types, but never
- * to general TV unless series/TV coverage is explicitly declared. Mixed
- * catalogues such as Movix preserve all three categories.
+ * Canonical semantics describe real catalogue capability; Nuvio transport
+ * aliases never widen that capability. Anime-only stays anime-only, while a
+ * provider explicitly declaring movie+anime preserves both canonical types.
  *
  * Canonical claims from other *live upstreams* may enrich an incomplete
  * variant. A published-baseline-only claim cannot expand a current upstream.
@@ -95,25 +94,27 @@ function inferSupportedTypes(candidate) {
   const metadata = candidate?.metadata || {};
   const canonicalMetadata = candidate?.canonical_metadata || {};
   const canonicalMayExpand = canonicalMetadataCanExpand(candidate);
-  // Published manifests may expose Nuvio transport aliases in supportedTypes
-  // (notably anime -> movie + tv). When canonicalSupportedTypes exists it is
-  // the semantic authority and transport aliases must not widen health fixtures.
-  const metadataSemanticTypes = (
-    Array.isArray(metadata.canonicalSupportedTypes) && metadata.canonicalSupportedTypes.length
-      ? metadata.canonicalSupportedTypes
-      : (Array.isArray(metadata.supportedTypes) ? metadata.supportedTypes : [])
-  );
-  const canonicalSemanticTypes = (
-    Array.isArray(canonicalMetadata.canonicalSupportedTypes) && canonicalMetadata.canonicalSupportedTypes.length
-      ? canonicalMetadata.canonicalSupportedTypes
-      : (Array.isArray(canonicalMetadata.supportedTypes) ? canonicalMetadata.supportedTypes : [])
-  );
+  const metadataHasCanonical = Array.isArray(metadata.canonicalSupportedTypes)
+    && metadata.canonicalSupportedTypes.length > 0;
+  const canonicalHasCanonical = Array.isArray(canonicalMetadata.canonicalSupportedTypes)
+    && canonicalMetadata.canonicalSupportedTypes.length > 0;
+  const metadataSemanticTypes = metadataHasCanonical
+    ? metadata.canonicalSupportedTypes
+    : (Array.isArray(metadata.supportedTypes) ? metadata.supportedTypes : []);
+  const canonicalSemanticTypes = canonicalHasCanonical
+    ? canonicalMetadata.canonicalSupportedTypes
+    : (Array.isArray(canonicalMetadata.supportedTypes) ? canonicalMetadata.supportedTypes : []);
   const declaredValues = [
     ...metadataSemanticTypes,
     ...(canonicalMayExpand ? canonicalSemanticTypes : []),
   ];
-  const declared = new Set(
-    declaredValues.map(normalizeSupportedType).filter(Boolean),
+  const declared = new Set(declaredValues.map(normalizeSupportedType).filter(Boolean));
+  const explicitCanonicalValues = [
+    ...(metadataHasCanonical ? metadata.canonicalSupportedTypes : []),
+    ...(canonicalMayExpand && canonicalHasCanonical ? canonicalMetadata.canonicalSupportedTypes : []),
+  ];
+  const explicitCanonical = new Set(
+    explicitCanonicalValues.map(normalizeSupportedType).filter(Boolean),
   );
   const signals = descriptionTypeSignals(semanticText(candidate));
   const inferred = new Set();
@@ -121,7 +122,14 @@ function inferSupportedTypes(candidate) {
   if (signals.tv) inferred.add('tv');
   if (signals.anime) inferred.add('anime');
 
-  if (signals.anime && !signals.movie && !signals.tv) return ['movie', 'anime'];
+  // Launch aliases never manufacture canonical catalogue capability.
+  // Explicit canonical movie+anime remains movie+anime; anime-only stays anime-only.
+  if (signals.anime && !signals.movie && !signals.tv) {
+    const semantic = explicitCanonical.size
+      ? new Set([...explicitCanonical, 'anime'])
+      : new Set(['anime']);
+    return ['movie', 'tv', 'anime'].filter((value) => semantic.has(value));
+  }
 
   const combined = new Set([...declared, ...inferred]);
   if (!combined.size) {

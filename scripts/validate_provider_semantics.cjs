@@ -90,13 +90,13 @@ const animeOnly = {
 };
 assert.deepEqual(
   inferSupportedTypes(animeOnly),
-  ['movie', 'anime'],
-  'anime catalogues must expose anime films without being presented as general TV catalogues',
+  ['anime'],
+  'anime-only transport aliases must not manufacture semantic movie capability',
 );
 assert.equal(
   isAnimeFocusedCatalogue(animeOnly),
   true,
-  'anime-only catalogues must validate movie requests against anime-film fixtures',
+  'anime-only catalogues remain identifiable without creating a generic movie lane',
 );
 
 const genericMoviesAndAnime = {

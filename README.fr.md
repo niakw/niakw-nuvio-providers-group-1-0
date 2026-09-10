@@ -185,11 +185,11 @@ Un provider exclusivement anime peut donc légitimement exposer :
 ```json
 {
   "canonicalSupportedTypes": ["anime"],
-  "supportedTypes": ["anime", "tv", "movie"]
+  "supportedTypes": ["anime", "tv", "series"]
 }
 ```
 
-`tv` transporte les anime épisodiques et `movie` les films anime. Ces alias ne transforment **pas** le provider en provider film/série générique ; un contenu non-anime doit toujours être rejeté par la logique d’identité autoritaire.
+`tv` et `series` sont les alias de transport épisodique de l’anime. `movie` n’est exposé que si le provider déclare réellement une capacité canonique `movie` ; les alias de transport n’élargissent jamais la capacité sémantique.
 
 ### Règles runtime
 

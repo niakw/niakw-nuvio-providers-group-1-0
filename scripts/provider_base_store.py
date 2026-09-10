@@ -580,6 +580,89 @@ def build_provider_data_model(
             else None
         ),
         "routeProofVersion": int(incoming_model.get("routeProofVersion") or 0),
+        "proofSearchBases": [
+            str(value).strip()
+            for value in incoming_model.get("proofSearchBases") or []
+            if _provider_data_url_is_executable(value)
+        ][:6],
+        "proofDetailBases": [
+            str(value).strip()
+            for value in incoming_model.get("proofDetailBases") or []
+            if _provider_data_url_is_executable(value)
+        ][:6],
+        "proofProtectedHosts": [
+            str(value).strip().casefold()
+            for value in incoming_model.get("proofProtectedHosts") or []
+            if str(value).strip()
+        ][:24],
+        "searchRequestPlan": [
+            {
+                "base": str(row.get("base") or "").strip(),
+                "route": str(row.get("route") or "").strip(),
+                "requestSpec": row.get("requestSpec") if isinstance(row.get("requestSpec"), dict) else {"method": "GET"},
+                "proofModelVersion": int(row.get("proofModelVersion") or 0),
+                "sourceRole": str(row.get("sourceRole") or "catalog-search"),
+                "semanticTypes": [
+                    str(value).strip().casefold()
+                    for value in row.get("semanticTypes") or []
+                    if str(value).strip().casefold() in {"movie", "tv", "anime"}
+                ],
+            }
+            for row in incoming_model.get("searchRequestPlan") or []
+            if isinstance(row, dict)
+            and _provider_data_url_is_executable(row.get("base"))
+            and _provider_data_route_is_executable(row.get("route"))
+            and int(row.get("proofModelVersion") or 0) >= 5
+        ][:6],
+        "providerValuePlan": [
+            {
+                "searchBase": str(plan.get("searchBase") or "").strip(),
+                "searchRoute": str(plan.get("searchRoute") or "").strip(),
+                "searchRequestSpec": plan.get("searchRequestSpec") if isinstance(plan.get("searchRequestSpec"), dict) else {"method": "GET"},
+                "steps": [
+                    {
+                        "base": str(step.get("base") or "").strip(),
+                        "route": str(step.get("route") or "").strip(),
+                        "requestSpec": step.get("requestSpec") if isinstance(step.get("requestSpec"), dict) else {"method": "GET"},
+                        "role": str(step.get("role") or "detail").strip().casefold(),
+                    }
+                    for step in plan.get("steps") or []
+                    if isinstance(step, dict)
+                    and _provider_data_url_is_executable(step.get("base"))
+                    and _provider_data_route_is_executable(step.get("route"))
+                    # NIAKVIO_PROVIDER_RESPONSE_VALUE_PROJECTION_V20_3
+                    and ("{id}" in str(step.get("route") or "") or "{slug}" in str(step.get("route") or ""))
+                ][:8],
+                "semanticTypes": [
+                    str(value).strip().casefold()
+                    for value in plan.get("semanticTypes") or []
+                    if str(value).strip().casefold() in {"movie", "tv", "anime"}
+                ],
+                "proofModelVersion": int(plan.get("proofModelVersion") or 0),
+                "sourceRole": str(plan.get("sourceRole") or "provider-value-correlation"),
+            }
+            for plan in incoming_model.get("providerValuePlan") or []
+            if isinstance(plan, dict)
+            and _provider_data_url_is_executable(plan.get("searchBase"))
+            and _provider_data_route_is_executable(plan.get("searchRoute"))
+            and int(plan.get("proofModelVersion") or 0) >= 5
+            and isinstance(plan.get("steps"), list)
+            and plan.get("steps")
+        ][:12],
+        "externalIdentityPlan": [
+            {
+                "base": str(row.get("base") or "").strip(),
+                "route": str(row.get("route") or "").strip(),
+                "requestSpec": row.get("requestSpec") if isinstance(row.get("requestSpec"), dict) else {"method": "GET"},
+                "proofModelVersion": int(row.get("proofModelVersion") or 0),
+                "sourceRole": str(row.get("sourceRole") or "external-identity-detail"),
+            }
+            for row in incoming_model.get("externalIdentityPlan") or []
+            if isinstance(row, dict)
+            and _provider_data_url_is_executable(row.get("base"))
+            and _provider_data_route_is_executable(row.get("route"))
+            and "{imdbid}" in str(row.get("route") or "").casefold()
+        ][:4],
         "sourceRuntimeFamily": str(incoming_model.get("sourceRuntimeFamily") or "unknown"),
         "identityInput": _normalize_identity_input(incoming_model.get("identityInput")),
         "strictIdentity": bool(incoming_model.get("strictIdentity", False)),
@@ -705,8 +788,8 @@ function _extractUrls(text, base) {
   const out = [];
   const normalized = _embeddedText(text);
   const patterns = [
-    /(?:src|href|file|url|pathname|permalink|embedUrl|embed_url|contentUrl)\s*["']?\s*[:=]\s*["']([^"'<>\s]+)["']/gi,
-    /["'](\/(?:api|watch|embed|player|play|video|videos|stream|streams|source|sources|server|servers|resolve|proxy|manifest|action)(?:[^"'<>\\\s]{0,500}))["']/gi,
+    /(?:src|href|file|url|pathname|permalink|embedUrl|embed_url|contentUrl|data-(?:src|url|video|embed|player|file|stream|link|href))\s*["']?\s*[:=]\s*["']([^"'<>\s]+)["']/gi,
+    /["'](\/(?:api|watch|embed|player|play|video|videos|stream|streams|source|sources|server|servers|resolve|proxy|manifest|hls|dash|action)(?:[^"'<>\\\s]{0,500}))["']/gi,
     /https?:\/\/[^"'<>\s]+/gi
   ];
   for (const pattern of patterns) {
@@ -737,7 +820,9 @@ function _playerLike(url) {
     if (/(?:^|\.)(?:abhilinks\.(?:site|life)|vcloud\.zip|hubcloud\.[a-z0-9.-]+|driveseed\.[a-z0-9.-]+|hubdrive\.[a-z0-9.-]+|gdflix\.[a-z0-9.-]+)$/i.test(host)) {
       return true;
     }
-    return /\/(?:watch|embed|player|play|video|videos|stream|streams|source|sources|server|servers|resolve|proxy|drive|download)(?:[/?#.-]|$)/i.test(parsed.pathname + parsed.search);
+    const providerOrigin = _runtimeBases().some(base => _origin(base) === parsed.origin);
+    if (!providerOrigin && /^\/e\/[^/?#]+(?:[/?#]|$)/i.test(parsed.pathname + parsed.search)) return true;
+    return /\/(?:watch|embed|player|play|video|videos|stream|streams|source|sources|server|servers|resolve|proxy|drive|download|file|files)(?:[/?#.-]|$)/i.test(parsed.pathname + parsed.search);
   } catch (_) {
     return false;
   }
@@ -751,7 +836,7 @@ function _crawlUrlScore(url) {
     let score = 0;
     if (/(?:^|\.)(?:vcloud|hubcloud|driveseed|hubdrive|gdflix|gofile|pixeldrain|streamtape|vidmoly|filelions|filemoon|streamwish|wishfast|dood|doodstream|mixdrop|voe|lulustream|savefiles)\./i.test(host)) score += 900;
     if (/(?:^|\.)(?:abhilinks\.(?:site|life))$/i.test(host)) score += 500;
-    if (/\/(?:watch|embed|player|play|video|stream|source|server|resolve|proxy|drive|download|dl|links?|redirect)(?:[/?#.-]|$)/i.test(path)) score += 420;
+    if (/\/(?:watch|embed|player|play|video|stream|source|server|resolve|proxy|drive|download|file|files|dl|links?|redirect)(?:[/?#.-]|$)/i.test(path)) score += 420;
     if (/\/archives?\/\d+/i.test(path)) score += 180;
     if (/(?:^|\.)(?:t\.me|telegram\.me|facebook\.com|instagram\.com|twitter\.com|x\.com|youtube\.com|youtu\.be)$/i.test(host)) score -= 1600;
     if (/\/(?:feed|comments?\/feed|wp-json\/oembed|assets?|static|images?|icons?|fonts?)(?:[/?#.-]|$)/i.test(path)) score -= 1200;
@@ -777,19 +862,265 @@ function _crawlEligible(url) {
     const hash = _text(parsed.hash).toLowerCase();
     if (/^#(?:comments?|respond|reply|share)/i.test(hash)) return false;
     if (/(?:^|\.)(?:t\.me|telegram\.me|facebook\.com|instagram\.com|twitter\.com|x\.com|youtube\.com|youtu\.be)$/i.test(host)) return false;
-    if (/\/(?:feed|comments?\/feed|wp-json(?:\/|$)|wp-admin|admin|login|register|assets?|static|images?|icons?|fonts?)(?:[/?#.-]|$)/i.test(path)) return false;
+    if (/\/(?:feed|comments?\/feed|wp-json(?:\/|$)|wp-admin|admin|login|register|signin|signup|collapse|assets?|static|images?|icons?|fonts?)(?:[/?#.-]|$)/i.test(path)) return false;
     if (/\.(?:css|js|jpe?g|png|gif|webp|svg|avif|ico|woff2?|ttf)(?:[?#]|$)/i.test(path)) return false;
     if (/(?:\+t\.uri|code%3a|message%3a|xhr%3a|\{status:)/i.test(path)) return false;
     return _playerLike(url) || _crawlUrlScore(url) > 0;
   } catch (_) { return false; }
 }
+/* NIAKVIO_PROVIDER_BASE_BOUNDED_EXTERNAL_ROOT_V10 */
+function _crawlFollowable(url, fromUrl) {
+  if (!_crawlEligible(url)) return false;
+  if (_directMedia(url)) return true;
+  try {
+    const next = new URL(url);
+    const from = new URL(fromUrl);
+    const rootOnly = (next.pathname === "/" || next.pathname === "") && !next.search && !next.hash;
+    if (rootOnly && next.origin !== from.origin) return false;
+    return true;
+  } catch (_) { return false; }
+}
+/* NIAKVIO_PROVIDER_PACKED_PLAYER_V18_6 */
+function _spv186UnpackPackedPlayer(code) {
+  const source = _text(code);
+  if (!source.includes("p,a,c,k,e,d")) return source;
+  try {
+    function blocks(input) {
+      const out = [];
+      let pos = 0;
+      while (true) {
+        const start = input.indexOf("eval(function(p,a,c,k,e,d)", pos);
+        if (start < 0) break;
+        let depth = 0, single = false, double = false, escaped = false, i = start;
+        for (; i < input.length; i++) {
+          const ch = input[i];
+          if (escaped) { escaped = false; continue; }
+          if (ch === "\\") { escaped = true; continue; }
+          if (!double && ch === "'") single = !single;
+          else if (!single && ch === '"') double = !double;
+          if (single || double) continue;
+          if (ch === "(") depth += 1;
+          else if (ch === ")") {
+            depth -= 1;
+            if (depth === 0) { i += 1; break; }
+          }
+        }
+        if (i > start) out.push(input.slice(start, i));
+        pos = Math.max(i, start + 1);
+      }
+      return out.slice(0, 8);
+    }
+    function decodeString(src, start) {
+      const quote = src[start];
+      if (quote !== "'" && quote !== '"') return null;
+      let out = "", escaped = false, i = start + 1;
+      for (; i < src.length; i++) {
+        const ch = src[i];
+        if (escaped) {
+          if (ch === "n") out += "\n";
+          else if (ch === "r") out += "\r";
+          else if (ch === "t") out += "\t";
+          else out += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") { escaped = true; continue; }
+        if (ch === quote) return { value: out, end: i + 1 };
+        out += ch;
+      }
+      return null;
+    }
+    function skipWs(src, i) { while (i < src.length && /\s/.test(src[i])) i += 1; return i; }
+    function integer(src, i) {
+      i = skipWs(src, i);
+      const match = src.slice(i).match(/^\d+/);
+      return match ? { value: parseInt(match[0], 10), end: i + match[0].length } : null;
+    }
+    function decodeBlock(block) {
+      const call = block.indexOf("}(");
+      if (call < 0) return null;
+      let i = skipWs(block, call + 2);
+      const payload = decodeString(block, i);
+      if (!payload) return null;
+      i = skipWs(block, payload.end);
+      if (block[i] !== ",") return null;
+      const radixRow = integer(block, i + 1);
+      if (!radixRow || radixRow.value < 2 || radixRow.value > 62) return null;
+      const radix = radixRow.value;
+      i = skipWs(block, radixRow.end);
+      if (block[i] !== ",") return null;
+      const countRow = integer(block, i + 1);
+      if (!countRow || countRow.value > 10000) return null;
+      let count = countRow.value;
+      i = skipWs(block, countRow.end);
+      if (block[i] !== ",") return null;
+      const wordsRow = decodeString(block, skipWs(block, i + 1));
+      if (!wordsRow) return null;
+      if (!/^\s*\.split\(\s*['"]\|['"]\s*\)/.test(block.slice(wordsRow.end, wordsRow.end + 32))) return null;
+      const words = wordsRow.value.split("|").slice(0, 10000);
+      function key(value) {
+        return (value < radix ? "" : key(parseInt(value / radix, 10)))
+          + ((value = value % radix) > 35 ? String.fromCharCode(value + 29) : value.toString(36));
+      }
+      const dictionary = {};
+      while (count-- > 0) dictionary[key(count)] = words[count] || key(count);
+      return payload.value.replace(/\b\w+\b/g, word => dictionary[word] || word);
+    }
+    let result = source;
+    for (const block of blocks(source)) {
+      const decoded = decodeBlock(block);
+      if (decoded) result = result.replace(block, decoded);
+    }
+    return result;
+  } catch (_) {
+    return source;
+  }
+}
+/* NIAKVIO_PROVIDER_PLAYER_ROUTE_VARIANT_V18_7 */
+function _spv187PlayerRouteVariants(raw) {
+  try {
+    const parsed = new URL(_text(raw));
+    if (!/^https?:$/i.test(parsed.protocol)) return [];
+    const original = parsed.toString();
+    const nextPath = _text(parsed.pathname).replace(
+      /^\/(?:embed|e|f|d|file|download)\/([^/?#]+)\/?$/i,
+      "/v/$1"
+    );
+    if (!nextPath || nextPath === parsed.pathname) return [];
+    parsed.pathname = nextPath;
+    parsed.hash = "";
+    const next = _crawlCanonical(parsed.toString());
+    return next && next !== _crawlCanonical(original) ? [next] : [];
+  } catch (_) {
+    return [];
+  }
+}
+function _spv187PrioritizedPlayerRoutes(values) {
+  const out = [];
+  for (const raw of values || []) {
+    const canonical = _crawlCanonical(raw);
+    if (!canonical) continue;
+    for (const variant of _spv187PlayerRouteVariants(canonical)) out.push(variant);
+    out.push(canonical);
+  }
+  return _uniq(out);
+}
+function _spv187QueueScore(url) {
+  let bonus = 0;
+  try {
+    const path = _text(new URL(url).pathname);
+    if (/^\/v\/[A-Za-z0-9_-]{3,160}\/?$/i.test(path)) bonus = 1000;
+  } catch (_) {}
+  return _crawlUrlScore(url) + bonus;
+}
+/* NIAKVIO_PROVIDER_PLAYER_FORM_HANDOFF_V18_8 */
+function _spv188HtmlAttr(tag, name) {
+  const source = _text(tag);
+  const key = _text(name);
+  if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(key)) return "";
+  const quoted = source.match(new RegExp("\\b" + key + "\\s*=\\s*([\\\"'])([\\s\\S]*?)\\1", "i"));
+  if (quoted) return quoted[2].replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+  const bare = source.match(new RegExp("\\b" + key + "\\s*=\\s*([^\\s>]+)", "i"));
+  return bare ? bare[1] : "";
+}
+function _spv188PlayerForm(html, pageUrl) {
+  const source = _text(html).slice(0, 524288);
+  if (!source || !/^https?:\/\//i.test(_text(pageUrl))) return null;
+  const forms = /<form\b([^>]*)>([\s\S]*?)<\/form\s*>/gi;
+  let match, scanned = 0;
+  while ((match = forms.exec(source)) && scanned++ < 8) {
+    const attrs = match[1] || "";
+    if (_spv188HtmlAttr(attrs, "id").toUpperCase() !== "F1") continue;
+    const method = _spv188HtmlAttr(attrs, "method").toUpperCase();
+    if (method && method !== "POST") continue;
+    let page, target;
+    try {
+      page = new URL(pageUrl);
+      target = new URL(_spv188HtmlAttr(attrs, "action") || page.toString(), page.toString());
+    } catch (_) { return null; }
+    if (!/^https?:$/i.test(target.protocol) || target.origin !== page.origin) return null;
+    const params = new URLSearchParams();
+    const inputs = match[2].match(/<input\b[^>]*>/gi) || [];
+    for (const tag of inputs.slice(0, 32)) {
+      const type = _spv188HtmlAttr(tag, "type").toLowerCase();
+      if (type && type !== "hidden") continue;
+      const name = _spv188HtmlAttr(tag, "name");
+      if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(name)) continue;
+      const value = _spv188HtmlAttr(tag, "value").slice(0, 2048);
+      params.append(name, value);
+    }
+    if (!params.has("file_code")) {
+      const code = page.pathname.split("/").filter(Boolean).pop() || "";
+      if (/^[A-Za-z0-9_-]{3,160}$/.test(code)) params.set("file_code", code);
+    }
+    if (![...params.keys()].length) return null;
+    target.hash = "";
+    return { url: target.toString(), body: params.toString() };
+  }
+  return null;
+}
+/* NIAKVIO_PROVIDER_SHARED_PLAYER_TRACE_V21 */
+/* NIAKVIO_PROVIDER_OBFUSCATED_HLS_PLAYER_V21 */
+function _spv21DecodedObfuscatedHls(html, pageUrl) {
+  const source = _text(html).slice(0, 1048576);
+  if (!source || !/^https?:\/\//i.test(_text(pageUrl))) return "";
+  let hostname = "";
+  try { hostname = new URL(pageUrl).hostname || ""; } catch (_) { return ""; }
+  let videoUrl = "";
+
+  // Current family: encoded string is base64, reversed, then XOR-decoded with
+  // a key derived from the response hostname. The visible /troll/ HLS is a decoy.
+  const dynamic = source.match(/\}\)\(["']([A-Za-z0-9+/=_-]{50,})["']\)/);
+  if (dynamic && source.includes("reverse().join")) {
+    const encoded = dynamic[1].replace(/-/g, "+").replace(/_/g, "/");
+    let binary = "";
+    try { binary = atob(encoded); } catch (_) {}
+    if (binary) {
+      let hostHash = 0;
+      for (let index = 0; index < hostname.length; index += 1) {
+        hostHash = (hostHash + hostname.charCodeAt(index)) & 255;
+      }
+      const reversed = binary.split("").reverse().join("");
+      let decoded = "";
+      for (let index = 0; index < reversed.length; index += 1) {
+        const key = (0x3d + index * 89 + hostHash) & 255;
+        decoded += String.fromCharCode(reversed.charCodeAt(index) ^ key);
+      }
+      if (/^https?:\/\//i.test(decoded) && /\.m3u8(?:[?#]|$)/i.test(decoded) && !/\/troll\//i.test(decoded)) {
+        videoUrl = decoded;
+      }
+    }
+  }
+
+  // Legacy family: static repeating XOR key stored directly in the player JS.
+  if (!videoUrl) {
+    const legacy = /(?:var|let|const)\s+k=\[([0-9,\s]+)\],b=atob\(s\)[\s\S]*?return\s+\w+\}\)\(["']([A-Za-z0-9+/=_-]+)["']\)/g;
+    let match, scanned = 0;
+    while ((match = legacy.exec(source)) !== null && scanned++ < 8) {
+      const keys = match[1].split(",").map(value => Number.parseInt(value.trim(), 10)).filter(Number.isFinite).slice(0, 64);
+      if (!keys.length) continue;
+      const encoded = match[2].replace(/-/g, "+").replace(/_/g, "/");
+      let binary = "";
+      try { binary = atob(encoded); } catch (_) { continue; }
+      let decoded = "";
+      for (let index = 0; index < binary.length; index += 1) {
+        decoded += String.fromCharCode(binary.charCodeAt(index) ^ keys[index % keys.length]);
+      }
+      if (/^https?:\/\//i.test(decoded) && /\.m3u8(?:[?#]|$)/i.test(decoded) && !/\/troll\//i.test(decoded)) {
+        videoUrl = decoded;
+        break;
+      }
+    }
+  }
+  return videoUrl;
+}
 async function _crawlDirectMedia(seedUrls, referer, maxDepth) {
-  const queue = _uniq(seedUrls.map(_crawlCanonical)).filter(Boolean).filter(_crawlEligible).sort((a,b)=>_crawlUrlScore(b)-_crawlUrlScore(a)).slice(0, 8).map(url => ({ url, depth: 0, referer }));
+  const queue = _spv187PrioritizedPlayerRoutes(seedUrls).filter(_crawlEligible).sort((a,b)=>_spv187QueueScore(b)-_spv187QueueScore(a)).slice(0, 8).map(url => ({ url, depth: 0, referer }));
   const seen = new Set();
   const streams = [];
   let requests = 0;
   while (queue.length && requests < 10 && streams.length < 12) {
-    queue.sort((a,b)=>_crawlUrlScore(b.url)-_crawlUrlScore(a.url));
+    queue.sort((a,b)=>_spv187QueueScore(b.url)-_spv187QueueScore(a.url));
     const row = queue.shift();
     if (!row || seen.has(row.url)) continue;
     seen.add(row.url);
@@ -805,18 +1136,68 @@ async function _crawlDirectMedia(seedUrls, referer, maxDepth) {
         continue;
       }
       let urls = [];
+      let playerText = "";
       if (contentType.includes("json")) {
         urls = _jsonUrls(await response.json());
       } else {
-        urls = _extractUrls(await response.text(), responseUrl);
+        playerText = await response.text();
+        const decodedPlayerText = _spv186UnpackPackedPlayer(playerText);
+        urls = _extractUrls(decodedPlayerText, responseUrl);
       }
+      const decodedObfuscatedHls = playerText
+        ? _spv21DecodedObfuscatedHls(playerText, responseUrl) : "";
+      if (decodedObfuscatedHls) {
+        streams.push(..._streams([decodedObfuscatedHls], responseUrl));
+        continue;
+      }
+      // Never promote the known content-shape decoy as a direct stream.
+      urls = urls.filter(url => !/\/troll\/master\.m3u8(?:[?#]|$)/i.test(_text(url)));
       const direct = urls.filter(_directMedia);
       if (direct.length) {
         streams.push(..._streams(direct, responseUrl));
         continue;
       }
+      const formRequest = playerText ? _spv188PlayerForm(playerText, responseUrl) : null;
+      if (formRequest && requests < 10) {
+        try {
+          requests += 1;
+          const postResponse = await fetch(formRequest.url, {
+            method: "POST",
+            headers: {
+              Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+              "Content-Type": "application/x-www-form-urlencoded",
+              Referer: responseUrl
+            },
+            body: formRequest.body,
+            redirect: "follow"
+          });
+          if (postResponse && postResponse.ok) {
+            const postUrl = _text(postResponse.url || formRequest.url);
+            const postText = await postResponse.text();
+            const postDecoded = _spv186UnpackPackedPlayer(postText);
+            const postUrls = _extractUrls(postDecoded, postUrl);
+            const postDirect = postUrls.filter(_directMedia);
+            if (postDirect.length) {
+              streams.push(..._streams(postDirect, postUrl));
+              continue;
+            }
+            if (row.depth < Math.max(0, Number(maxDepth) || 0)) {
+              for (const nested of postUrls.filter(_crawlEligible).slice(0, 6)) {
+                const next = _crawlCanonical(nested);
+                if (next && !seen.has(next)) queue.push({ url: next, depth: row.depth + 1, referer: postUrl });
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      // The same opaque player id is often exposed under a landing/embed path
+      // and a canonical /v/ player path. Try only this bounded same-origin
+      // representation change; it does not consume recursive crawl depth.
+      for (const variant of _spv187PlayerRouteVariants(responseUrl)) {
+        if (!seen.has(variant)) queue.push({ url: variant, depth: row.depth, referer: responseUrl });
+      }
       if (row.depth < Math.max(0, Number(maxDepth) || 0)) {
-        for (const next of _uniq(urls.map(_crawlCanonical)).filter(Boolean).filter(_crawlEligible).sort((a,b)=>_crawlUrlScore(b)-_crawlUrlScore(a)).slice(0, 4)) {
+        for (const next of _uniq(urls.map(_crawlCanonical)).filter(Boolean).filter(next=>_crawlFollowable(next,responseUrl)).sort((a,b)=>_crawlUrlScore(b)-_crawlUrlScore(a)).slice(0, 4)) {
           if (!seen.has(next)) queue.push({ url: next, depth: row.depth + 1, referer: responseUrl });
         }
       }
@@ -833,6 +1214,22 @@ function _candidateScore(url, meta) {
   const tokens = slug.split("-").filter(token => token.length >= 3);
   let score = 0;
   if (slug && path.includes(slug)) score += 120;
+  // NIAKVIO_PROVIDER_SOURCE_PLAN_V12
+  if (slug) {
+    const leaf = path.split("/").filter(Boolean).pop() || "";
+    const titleTokens = slug.split("-").filter(Boolean);
+    const leafTokens = leaf.split(/[^a-z0-9]+/).filter(Boolean);
+    const titleSet = new Set(titleTokens);
+    const missing = titleTokens.filter(token => !leafTokens.includes(token));
+    if (!missing.length) {
+      const extras = leafTokens.filter(token =>
+        !titleSet.has(token) &&
+        !["tv", "series", "show", "anime"].includes(token) &&
+        !/^\d{4}$/.test(token)
+      );
+      score += Math.max(-120, 240 - extras.length * 60);
+    }
+  }
   for (const token of tokens) if (path.includes(token)) score += 18;
   if (meta && meta.year && path.includes(String(meta.year))) score += 20;
   if (meta && meta.tmdbId && path.includes(String(meta.tmdbId))) score += 45;
@@ -853,10 +1250,12 @@ function _expandLearnedRoute(pattern, meta, mediaType, season, episode, bases) {
     return /^https?:\/\//i.test(route) ? [route] : [];
   }
   const id = _text(meta && meta.tmdbId);
+  const imdbId = _text(meta && meta.imdbId);
   const title = _text(meta && meta.title);
   const slug = _slug(title);
   const transport = mediaType === "movie" ? "movie" : "tv";
   route = route.replace(/\{tmdb_?id\}/gi, encodeURIComponent(id));
+  route = route.replace(/\{imdb_?id\}/gi, encodeURIComponent(imdbId));
   // {id} has no universal meaning across providers. It can be a provider
   // catalogue/session/file/MAL id. Only the explicit tmdb_direct identity
   // contract permits using the incoming TMDB id as its implicit value.
@@ -887,7 +1286,7 @@ function _routeKind(route) {
   if (/\/(?:search|recherche)(?:[/?#]|$)|[?&](?:s|q|query|keyword)=/i.test(value)) return "search";
   if (/\/(?:api)(?:[./?#]|$)/i.test(value)) return "api";
   if (/\/(?:player|embed|play)(?:[/?#]|$)/i.test(value)) return "player";
-  if (/\{(?:tmdb_?id|id|slug|title)\}/i.test(value) || /\/(?:title|movie|film|series|tv|show|watch|media)(?:[/?#]|$)/i.test(value)) return "detail";
+  if (/\{(?:tmdb_?id|imdb_?id|id|slug|title)\}/i.test(value) || /\/(?:title|movie|film|series|tv|show|watch|media)(?:[/?#]|$)/i.test(value)) return "detail";
   return "ignore";
 }
 function _learnedUrls(kind, meta, mediaType, season, episode) {
@@ -990,6 +1389,7 @@ async function _tmdb(tmdbId, mediaType) {
 }
 function _searchBases() {
   return _uniq([
+    ...(Array.isArray(NIAKVIO_PROVIDER_MODEL.proofSearchBases) ? NIAKVIO_PROVIDER_MODEL.proofSearchBases : []),
     NIAKVIO_PROVIDER_MODEL.officialSite,
     NIAKVIO_PROVIDER_MODEL.knownSite,
     NIAKVIO_PROVIDER_MODEL.officialHub
@@ -1004,13 +1404,20 @@ function _apiBases() {
   ].map(_substituteDomain)).filter(value => /^https?:/i.test(value));
 }
 function _runtimeBases() {
-  return _uniq([..._searchBases(), ..._apiBases()]);
+  return _uniq([
+    ...(Array.isArray(NIAKVIO_PROVIDER_MODEL.proofDetailBases) ? NIAKVIO_PROVIDER_MODEL.proofDetailBases : []),
+    ..._searchBases(),
+    ..._apiBases()
+  ].map(_substituteDomain));
 }
 function _searchUrls(meta, mediaType, season, episode) {
   return _learnedUrls("search", meta, mediaType, season, episode);
 }
 function _runtimePlanAvailable() {
   if (NIAKVIO_PROVIDER_MODEL.apiRecipe) return true;
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.providerValuePlan) && NIAKVIO_PROVIDER_MODEL.providerValuePlan.length) return true;
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.searchRequestPlan) && NIAKVIO_PROVIDER_MODEL.searchRequestPlan.length) return true;
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.externalIdentityPlan) && NIAKVIO_PROVIDER_MODEL.externalIdentityPlan.length) return true;
   return (NIAKVIO_PROVIDER_MODEL.routes || []).some(route => ["search","detail","player","api"].includes(_routeKind(route)));
 }
 function _apiUrls(tmdbId, mediaType, season, episode) {
@@ -1132,22 +1539,35 @@ function _jsonUrls(value, out) {
   }
   return out;
 }
-function _sourceUrls(value, base, out) {
+/* NIAKVIO_PROVIDER_BASE_STREAM_CONTAINERS_V12 */
+function _sourceUrls(value, base, out, streamContainer) {
   out = out || [];
+  if (typeof value === "string") {
+    if (streamContainer) {
+      const absolute = _absolute(value, base);
+      if (absolute && /^https?:/i.test(absolute) &&
+          !/\.(?:jpe?g|png|gif|webp|svg|avif)(?:[?#]|$)/i.test(absolute)) out.push(absolute);
+    }
+    return out;
+  }
   if (Array.isArray(value)) {
-    for (const child of value) _sourceUrls(child, base, out);
+    for (const child of value.slice(0, 80)) _sourceUrls(child, base, out, streamContainer);
     return out;
   }
   if (!value || typeof value !== "object") return out;
   for (const [key, child] of Object.entries(value)) {
-    if (typeof child === "string" && /^(?:src|url|file|stream|stream_url|streamUrl|source|source_url|sourceUrl)$/i.test(key)) {
+    const directField = /^(?:src|url|file|stream|stream_url|streamUrl|source|source_url|sourceUrl)$/i.test(key);
+    const pluralStreamContainer = /^(?:streams?|stream_urls?|streamUrls?|sources?|source_urls?|sourceUrls?)$/i.test(key);
+    if (typeof child === "string" && directField) {
       const absolute = _absolute(child, base);
       if (absolute && /^https?:/i.test(absolute) &&
           !/\.(?:jpe?g|png|gif|webp|svg|avif)(?:[?#]|$)/i.test(absolute)) {
         out.push(absolute);
       }
     }
-    if (child && typeof child === "object") _sourceUrls(child, base, out);
+    if (child && typeof child === "object") {
+      _sourceUrls(child, base, out, Boolean(streamContainer || pluralStreamContainer));
+    }
   }
   return out;
 }
@@ -1269,6 +1689,33 @@ function _recipeSourceUrls(value, base, recipe) {
   if (!recipe || !recipe.directSourcesOnly) return urls;
   return urls.filter(_directMedia);
 }
+function _recipePlaybackContext(recipe, requestSpec, base) {
+  const raw = requestSpec && requestSpec.headers && typeof requestSpec.headers === "object"
+    ? requestSpec.headers
+    : {};
+  const lower = {};
+  for (const [key, value] of Object.entries(raw)) lower[_text(key).toLowerCase()] = _text(value);
+  const headers = {};
+  if (lower["origin"]) headers.Origin = lower["origin"];
+  if (lower["user-agent"]) headers["User-Agent"] = lower["user-agent"];
+  if (lower["accept-language"]) headers["Accept-Language"] = lower["accept-language"];
+  const explicit = recipe && recipe.playbackHeaders && typeof recipe.playbackHeaders === "object"
+    ? recipe.playbackHeaders
+    : {};
+  for (const [key, value] of Object.entries(explicit)) {
+    if (!/^(?:origin|referer|referrer|user-agent|accept-language)$/i.test(_text(key))) continue;
+    if (/^(?:referer|referrer)$/i.test(_text(key))) continue;
+    headers[key] = _text(value);
+  }
+  if (recipe && recipe.origin) headers.Origin = _text(recipe.origin);
+  const referer = _text(
+    (recipe && recipe.referer)
+    || lower["referer"]
+    || lower["referrer"]
+    || base
+  );
+  return { referer, headers };
+}
 function _recipeUrl(pattern, values, base) {
   let route = _text(pattern);
   if (!route) return "";
@@ -1277,8 +1724,12 @@ function _recipeUrl(pattern, values, base) {
     title: values.query,
     id: values.providerId,
     providerId: values.providerId,
+    slug: values.providerSlug,
+    providerSlug: values.providerSlug,
     tmdbId: values.tmdbId,
     tmdb_id: values.tmdbId,
+    imdbId: values.imdbId,
+    imdb_id: values.imdbId,
     media: values.media,
     type: values.media,
     season: values.season,
@@ -1322,15 +1773,25 @@ function _recipeUrl(pattern, values, base) {
   }
 }
 /* NIAKVIO_PROVIDER_BASE_ROUTE_REQUEST_SPEC_V1 */
+/* NIAKVIO_PROVIDER_BASE_COMPOSITE_REQUEST_TEMPLATE_V21_8 */
 function _recipeExpandScalar(value, values) {
   if (typeof value !== "string") return value;
   const replacements = {
     query: values.query,
     title: values.query,
+    queryDots: _text(values.query).trim().replace(/\s+/g, "."),
+    query_dots: _text(values.query).trim().replace(/\s+/g, "."),
+    year: values.year,
+    season2: String(values.season == null ? "" : values.season).padStart(2, "0"),
+    episode2: String(values.episode == null ? "" : values.episode).padStart(2, "0"),
     id: values.providerId,
     providerId: values.providerId,
+    slug: values.providerSlug,
+    providerSlug: values.providerSlug,
     tmdbId: values.tmdbId,
     tmdb_id: values.tmdbId,
+    imdbId: values.imdbId,
+    imdb_id: values.imdbId,
     media: values.media,
     type: values.media,
     season: values.season,
@@ -1358,6 +1819,11 @@ function _recipeRequestSpec(recipe, key, values) {
   const method = _text(raw.method || "GET").toUpperCase();
   if (!/^(?:GET|POST|PUT|PATCH|DELETE|HEAD)$/.test(method)) return null;
   const spec = { method, headers: _recipeExpandObject(raw.headers || {}, values) || {} };
+  for (const key of Object.keys(spec.headers)) {
+    if (/^(?:origin|referer|referrer)$/i.test(key) && /^https?:\/\//i.test(_text(spec.headers[key]))) {
+      spec.headers[key] = _substituteDomain(spec.headers[key]);
+    }
+  }
   const bodyKind = _text(raw.bodyKind || "").toLowerCase();
   const body = _recipeExpandObject(raw.body || {}, values);
   if (bodyKind === "json" && body && typeof body === "object") {
@@ -1366,6 +1832,9 @@ function _recipeRequestSpec(recipe, key, values) {
   } else if (bodyKind === "form" && body && typeof body === "object") {
     spec.body = Object.entries(body).map(([key, value]) => encodeURIComponent(key) + "=" + encodeURIComponent(_text(value))).join("&");
     if (!Object.keys(spec.headers).some(key => key.toLowerCase() === "content-type")) spec.headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8";
+  /* NIAKVIO_PROVIDER_BASE_TEXT_BODY_REQUEST_V9 */
+  } else if (bodyKind === "text" && typeof raw.body === "string") {
+    spec.body = _recipeExpandScalar(raw.body, values);
   }
   return spec;
 }
@@ -1411,7 +1880,7 @@ function _recipeStaticBases(recipe){
     recipe.base,
     ...explicitFallbackBases,
     ...modelFallbackBases
-  ]).filter(value=>/^https?:/i.test(_text(value)));
+  ]).map(_substituteDomain).filter(value=>/^https?:/i.test(_text(value)));
 }
 async function _recipeStatusDynamicBase(recipe){
   if(!/^https?:\/\//i.test(_text(recipe.statusUrl))||!recipe.statusDomainField)return"";
@@ -1435,12 +1904,21 @@ async function _recipeStatusDynamicBase(recipe){
 async function _recipeBases(recipe){
   return _recipeStaticBases(recipe);
 }
+/* NIAKVIO_PROVIDER_BASE_TYPED_RESOLVER_API_V11 */
 async function _resolveApiRecipe(meta, mediaType, season, episode) {
   const recipe = NIAKVIO_PROVIDER_MODEL.apiRecipe;
   if (!recipe || typeof recipe !== "object") return [];
   const media = _mediaNamespace(mediaType);
   const bases = await _recipeBases(recipe);
-  if (!bases.length) return [];
+  const typedResolverRoute = media === "movie" ? recipe.movieRoute : (recipe.episodeRoute || recipe.movieRoute);
+  let typedResolverOrigin = "";
+  if (recipe.recipeKind === "typed-resolver-api") {
+    try {
+      const parsed = new URL(_text(typedResolverRoute));
+      if (/^https?:$/i.test(parsed.protocol)) typedResolverOrigin = parsed.origin;
+    } catch (_) {}
+  }
+  if (!bases.length && !typedResolverOrigin) return [];
   const values = {
     query: _text(meta && meta.title),
     providerId: _text(meta && meta.tmdbId),
@@ -1489,7 +1967,7 @@ async function _resolveApiRecipe(meta, mediaType, season, episode) {
     return streams.slice(0, 40);
   }
 
-  if (!recipe.searchRoute) return [];
+  if (!recipe.searchRoute && !typedResolverOrigin) return [];
   const searchQueries = _uniq([
     meta && meta.title,
     ...((meta && Array.isArray(meta.aliases)) ? meta.aliases : [])
@@ -1531,7 +2009,9 @@ async function _resolveApiRecipe(meta, mediaType, season, episode) {
     return null;
   }
 
-  let providerMatch = await findProvider(bases);
+  let providerMatch = typedResolverOrigin && !recipe.searchRoute
+    ? { id: "", base: typedResolverOrigin }
+    : await findProvider(bases);
   let dynamicStatusBase = "";
   if (!providerMatch && !statusFallbackBlocked) {
     dynamicStatusBase = await _recipeStatusDynamicBase(recipe);
@@ -1551,20 +2031,22 @@ async function _resolveApiRecipe(meta, mediaType, season, episode) {
       if (!url) continue;
       try {
         const requestKey = media === "movie" ? "movieRequest" : "episodeRequest";
-        const payload = await _recipePayload(url, recipe, _recipeRequestSpec(recipe, requestKey, values), values);
+        const requestSpec = _recipeRequestSpec(recipe, requestKey, values);
+        const payload = await _recipePayload(url, recipe, requestSpec, values);
+        const playback = _recipePlaybackContext(recipe, requestSpec, base);
         if (typeof payload.value === "string") {
           const urls = _extractUrls(payload.value, payload.base).filter(_directMedia);
           if (urls.length) return _streams(
             urls,
-            recipe.referer || base,
-            Object.assign({}, recipe.playbackHeaders || {}, recipe.origin ? { Origin: recipe.origin } : {})
+            playback.referer,
+            playback.headers
           );
         } else {
           const urls = _recipeSourceUrls(payload.value, payload.base, recipe);
           if (urls.length) return _streams(
             urls,
-            recipe.referer || base,
-            Object.assign({}, recipe.playbackHeaders || {}, recipe.origin ? { Origin: recipe.origin } : {})
+            playback.referer,
+            playback.headers
           );
         }
       } catch (_) {}
@@ -1729,7 +2211,15 @@ async function _resolveHtml(meta, mediaType, season, episode) {
       const response = await _fetch(detailUrl);
       const html = await response.text();
       if (!_strictHtmlIdentityOk(html, meta, mediaType)) continue;
-      let urls = _extractUrls(html, response.url || detailUrl);
+      const explicitPlayers = _spv15ExplicitPlayerAttrs(html, response.url || detailUrl);
+      if (explicitPlayers.length) {
+        const explicitCrawled = await _crawlDirectMedia(explicitPlayers, response.url || detailUrl, 3);
+        if (explicitCrawled.length) return explicitCrawled.slice(0, 40);
+      }
+      let urls = _uniq([
+        ...explicitPlayers,
+        ..._extractUrls(html, response.url || detailUrl)
+      ]);
       if (mediaType !== "movie" && season != null && episode != null) {
         const token = new RegExp("(?:s(?:eason)?\\s*0*" + Number(season) + "[^\\n]{0,80}e(?:pisode)?\\s*0*" + Number(episode) + "|0*" + Number(season) + "x0*" + Number(episode) + ")", "i");
         const episodeLinks = urls.filter(value => token.test(value));
@@ -1794,6 +2284,984 @@ async function _resolveHtml(meta, mediaType, season, episode) {
   }
   return streams.slice(0, 40);
 }
+/* NIAKVIO_PROVIDER_BASE_STRUCTURED_EXTERNAL_ID_V13 */
+function _externalEpisodeMarker(url, season, episode) {
+  let path = "";
+  try { path = decodeURIComponent(new URL(url).pathname || "").toLowerCase(); }
+  catch (_) { return { marked: false, matches: false }; }
+  const wantedSeason = Math.max(1, Number(season) || 1);
+  const wantedEpisode = Math.max(1, Number(episode) || 1);
+  let match = path.match(/\/(\d{1,3})\/(\d{1,4})\/[^/]*(?:playlist\.m3u8|manifest\.mpd|[^/]+\.(?:mp4|mkv|webm))(?:$|[?#])/i);
+  if (match) return {
+    marked: true,
+    matches: Number(match[1]) === wantedSeason && Number(match[2]) === wantedEpisode
+  };
+  match = path.match(/(?:^|[-_/])s(?:eason)?[-_ ]*0*(\d{1,3})[-_ ]*e(?:pisode)?[-_ ]*0*(\d{1,4})(?:[-_/]|$)/i);
+  if (match) return {
+    marked: true,
+    matches: Number(match[1]) === wantedSeason && Number(match[2]) === wantedEpisode
+  };
+  match = path.match(/(?:^|[-_/])0*(\d{1,3})x0*(\d{1,4})(?:[-_/]|$)/i);
+  if (match) return {
+    marked: true,
+    matches: Number(match[1]) === wantedSeason && Number(match[2]) === wantedEpisode
+  };
+  return { marked: false, matches: false };
+}
+function _externalPlaybackHeaders(requestSpec) {
+  const source = requestSpec && requestSpec.headers && typeof requestSpec.headers === "object"
+    ? requestSpec.headers : {};
+  const out = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (/^(?:origin|referer|referrer|user-agent)$/i.test(key) && value != null && value !== "") out[key] = value;
+  }
+  return out;
+}
+/* NIAKVIO_PROVIDER_BASE_SEARCH_REQUEST_PLAN_V14 */
+/* NIAKVIO_PROVIDER_BASE_CORRELATED_VALUE_PLAN_V18 */
+function _spv18ProviderIdFromJson(value, meta) {
+  /* NIAKVIO_PROVIDER_CORRELATED_VALUE_PLAN_V18_1 */
+  const labelKeys = [
+    "title","name","original_title","post_title","label","anime",
+    "movie","series","show","matched","display_name","displayName"
+  ];
+  const identityKeys = [
+    "id","ID","_id","media_id","post_id","anime_id","movie_id",
+    "series_id","show_id","slug","provider_slug","seo_slug"
+  ];
+  let bestScore = -1;
+  let bestIdentity = "";
+  const rows = _spv4JsonRows(value, []).slice(0, 300);
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    let rowScore = 0;
+    for (const key of labelKeys) {
+      const label = _spv4Scalar(row[key]);
+      if (!label) continue;
+      rowScore = Math.max(rowScore, _spv4TitleScore(label, meta));
+    }
+    if (rowScore < 90) continue;
+    let identity = "";
+    for (const key of identityKeys) {
+      const candidate = _spv4Scalar(row[key]);
+      if (candidate && candidate.length <= 160 && /^[A-Za-z0-9._~-]+$/.test(candidate)) {
+        identity = candidate;
+        break;
+      }
+    }
+    if (!identity) continue;
+    if (rowScore > bestScore) {
+      bestScore = rowScore;
+      bestIdentity = identity;
+    }
+  }
+  return bestIdentity;
+}
+/* NIAKVIO_PROVIDER_RESPONSE_VALUE_CORRELATION_V20 */
+function _spv20ProviderValuesFromHtml(html, meta) {
+  const source = _text(html).slice(0, 786432);
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match, scanned = 0;
+  let bestScore = -1;
+  let best = { id: "", slug: "" };
+  while ((match = anchorRe.exec(source)) !== null && scanned++ < 400) {
+    const label = _htmlVisibleText(match[2]).replace(/\s+/g, " ").trim();
+    const score = _spv4TitleScore(label, meta);
+    if (score < 90 || score < bestScore) continue;
+    const attrs = _text(match[1]);
+    let id = "";
+    let slug = "";
+    const idMatch = attrs.match(/\bdata-(?:id|post-id|media-id|anime-id|movie-id|series-id|show-id)\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/i);
+    if (idMatch) id = idMatch[1];
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])([^"']{1,900})\1/i);
+    if (hrefMatch) {
+      try {
+        const parsed = new URL(hrefMatch[2], "https://invalid.local/");
+        const raw = parsed.pathname.split("/").filter(Boolean).pop() || "";
+        const segment = decodeURIComponent(raw).replace(/\.html?$/i, "");
+        if (/^[A-Za-z0-9._~-]{2,160}$/.test(segment)) {
+          slug = segment;
+          const numeric = segment.match(/^(\d{2,})[-_.]/);
+          if (!id && numeric) id = numeric[1];
+        }
+      } catch (_) {}
+    }
+    if (!id && !slug) continue;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { id, slug };
+    }
+  }
+  if (!best.id) best.id = _spv18ProviderIdFromHtml(source, meta);
+  if (!best.slug) best.slug = best.id;
+  if (!best.id) best.id = best.slug;
+  return best;
+}
+function _spv20ProviderValuesFromJson(value, meta) {
+  const identity = _spv18ProviderIdFromJson(value, meta);
+  return { id: identity, slug: identity };
+}
+function _spv18ProviderIdFromHtml(html, meta) {
+  const source = _text(html);
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = anchorRe.exec(source)) !== null) {
+    const label = _htmlVisibleText(match[2]).replace(/\s+/g, " ").trim();
+    if (_spv4TitleScore(label, meta) < 90) continue;
+    const attrs = _text(match[1]);
+    const idMatch = attrs.match(/\bdata-(?:id|post-id|media-id|anime-id|movie-id|series-id|show-id)\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/i);
+    if (idMatch) return idMatch[1];
+  }
+  for (const title of _spv4Titles(meta)) {
+    const token = _text(title).trim();
+    if (!token) continue;
+    const at = source.toLowerCase().indexOf(token.toLowerCase());
+    if (at < 0) continue;
+    const windowText = source.slice(Math.max(0, at - 1400), Math.min(source.length, at + 1400));
+    const idMatch = windowText.match(/\bdata-(?:id|post-id|media-id|anime-id|movie-id|series-id|show-id)\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/i);
+    if (idMatch) return idMatch[1];
+  }
+  return "";
+}
+function _spv18ValueUrls(value, base, out) {
+  out = out || [];
+  if (Array.isArray(value)) {
+    for (const child of value) _spv18ValueUrls(child, base, out);
+    return out;
+  }
+  if (!value || typeof value !== "object") return out;
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === "string" && /^(?:src|url|file|stream|stream_url|streamUrl|source|source_url|sourceUrl|iframe|embed|player|link|href)$/i.test(key)) {
+      const absolute = _absolute(child, base);
+      if (absolute && /^https?:/i.test(absolute)) out.push(absolute);
+    }
+    if (child && typeof child === "object") _spv18ValueUrls(child, base, out);
+    if (out.length >= 160) break;
+  }
+  return out;
+}
+/* NIAKVIO_PROVIDER_VALUE_TRACE_V18_4 */
+/* NIAKVIO_PROVIDER_CORRELATED_VALUE_SEMANTIC_LANE_V18_5 */
+function _spv185PlanLaneAllowed(lanes, mediaType) {
+  if (!Array.isArray(lanes) || !lanes.length) return true;
+  const type = _text(mediaType).trim().toLowerCase();
+  if (lanes.includes(type)) return true;
+  const semantic = Array.isArray(NIAKVIO_PROVIDER_MODEL.supportedTypes)
+    ? NIAKVIO_PROVIDER_MODEL.supportedTypes.map(value => _text(value).trim().toLowerCase())
+    : [];
+  if (!semantic.includes("anime")) return false;
+  return (type === "tv" && lanes.includes("anime")) ||
+    (type === "anime" && lanes.includes("tv"));
+}
+/* NIAKVIO_PROVIDER_VALUE_TRACE_HISTORY_V21 */
+function _spv184Trace(stage, mediaType, providerId, stepIndex, route) {
+  try {
+    const row = {
+      stage: _text(stage).slice(0, 64),
+      lane: _text(mediaType).slice(0, 32),
+      providerId: _text(providerId).slice(0, 160),
+      stepIndex: Number.isFinite(Number(stepIndex)) ? Number(stepIndex) : -1,
+      route: _text(route).slice(0, 240)
+    };
+    globalThis.__nuvioProviderValueTraceV18 = row;
+    const history = Array.isArray(globalThis.__nuvioProviderValueTraceHistoryV21)
+      ? globalThis.__nuvioProviderValueTraceHistoryV21 : [];
+    history.push(row);
+    while (history.length > 48) history.shift();
+    globalThis.__nuvioProviderValueTraceHistoryV21 = history;
+  } catch (_) {}
+}
+/* NIAKVIO_PROVIDER_RESPONSE_VALUE_STATEFUL_V20_4 */
+/* NIAKVIO_PROVIDER_RESPONSE_VALUE_DEPENDENCY_V20_5 */
+function _spv205SeasonSignal(raw, season) {
+  const text = _text(raw).toLowerCase();
+  const wanted = Number(season);
+  if (!text || !Number.isFinite(wanted) || wanted <= 0) return 0;
+  const patterns = [
+    /(?:saison|season)[\s._-]*0*(\d{1,3})\b/i,
+    /(?:^|[^a-z0-9])s0*(\d{1,3})(?:[^a-z0-9]|$)/i,
+    /-(\d{1,3})-episode-/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const found = Number(match[1]);
+    if (!Number.isFinite(found)) continue;
+    return found === wanted ? 80 : -120;
+  }
+  return 0;
+}
+/* NIAKVIO_PROVIDER_MEDIA_IDENTITY_GUARD_V21_1 */
+function _spv211RegexEscape(value) {
+  return _text(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+/* NIAKVIO_PROVIDER_MEDIA_IDENTITY_GUARD_V21_2 */
+function _spv212Slug(value) {
+  return _text(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+function _spv212Titles(meta) {
+  const rows = [meta && meta.title, ...((meta && Array.isArray(meta.aliases)) ? meta.aliases : [])];
+  const out = [];
+  const seen = new Set();
+  for (const row of rows.slice(0, 8)) {
+    const value = _text(row).trim();
+    const key = _spv212Slug(value);
+    if (!value || !key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out.slice(0, 4);
+}
+function _spv211CandidateIdentityScore(title, href, meta, mediaType, season) {
+  const actual = _spv212Slug(title);
+  if (!actual) return 0;
+  const expected = _spv212Titles(meta).map(_spv212Slug).filter(Boolean);
+  const exact = expected.includes(actual);
+  let score = _spv4TitleScore(title, meta);
+  const lane = _text(mediaType).toLowerCase();
+  const context = _text(title) + " " + _text(href);
+
+  if (lane === "movie") {
+    if (!exact && /(?:^|[\s/_-])(?:saison|season|episode|ep)[\s._-]*\d{1,3}\b/i.test(context)) return -10000;
+    const wantedYear = Number(meta && (meta.year || meta.releaseYear || meta.release_year));
+    const years = context.match(/\b(?:19|20)\d{2}\b/g) || [];
+    if (Number.isFinite(wantedYear) && wantedYear > 1800 && years.length) {
+      if (!years.some(value => Number(value) === wantedYear)) return -10000;
+      score += 100;
+    }
+    return score;
+  }
+
+  // Anime is a TV-series identity lane at the TMDB boundary. A non-exact bare
+  // numeric franchise installment is not a season signal and commonly denotes
+  // another work (movie/prequel/sequel). Accept it only when TMDB itself exposes
+  // that complete title as an alias, which is covered by exact=true above.
+  if (!exact) {
+    for (const wanted of expected) {
+      const suffix = actual.match(new RegExp("^" + _spv211RegexEscape(wanted) + "-(\\d{1,3})$", "i"));
+      if (suffix) return -10000;
+    }
+  }
+  score += _spv205SeasonSignal(context, season);
+  return score;
+}
+/* NIAKVIO_PROVIDER_SERIES_SLUG_ROLE_V21_3 */
+function _spv213SlugCarriesEpisodeIdentity(value) {
+  const slug = _text(value).toLowerCase();
+  if (!slug) return false;
+  return /(?:^|[-_.])(?:s\d{1,3}[-_.]?e\d{1,4}|(?:season|saison)[-_.]?\d{1,3}|(?:episode|ep)[-_.]?\d{1,4}|\d{1,3}[-_.]episode[-_.]\d{1,4})(?:$|[-_.])/i.test(slug);
+}
+function _spv213StableSeriesSlug(currentSlug, candidateSlug, mediaType, valueSteps, completedSteps, currentStepIndex) {
+  const current = _text(currentSlug).trim();
+  const candidate = _text(candidateSlug).trim();
+  if (!candidate || !current || candidate === current) return candidate || current;
+  const lane = _text(mediaType).trim().toLowerCase();
+  if (lane !== "tv" && lane !== "anime") return candidate;
+  if (_spv213SlugCarriesEpisodeIdentity(current) || !_spv213SlugCarriesEpisodeIdentity(candidate)) return candidate;
+
+  const steps = Array.isArray(valueSteps) ? valueSteps : [];
+  const done = completedSteps && typeof completedSteps.has === "function" ? completedSteps : null;
+  let laterNeedsSeriesCoordinates = false;
+  for (let index = 0; index < steps.length; index += 1) {
+    if (index === Number(currentStepIndex) || (done && done.has(index))) continue;
+    const route = _text(steps[index] && steps[index].route);
+    if (!/\{slug\}/i.test(route)) continue;
+    if (/\{(?:season|episode)\}/i.test(route)) {
+      laterNeedsSeriesCoordinates = true;
+      break;
+    }
+  }
+  return laterNeedsSeriesCoordinates ? current : candidate;
+}
+/* NIAKVIO_PROVIDER_EPISODE_SCOPED_JSON_V21_4 */
+/* Historical V20.5 proof marker only; executable V21.4 extraction below must
+   never use this unscoped expression: ..._spv205HttpValues(payload.value, payload.base, []) */
+function _spv214EpisodeNumber(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return 0;
+  for (const key of ["episode", "episode_number", "episodeNumber", "ep", "number", "num"]) {
+    const value = Number(row[key]);
+    if (Number.isFinite(value) && value > 0 && value <= 10000) return Math.floor(value);
+  }
+  return 0;
+}
+function _spv214EpisodeTableKeys(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const keys = Object.keys(value).filter(key => /^\d{1,4}$/.test(key));
+  if (!keys.length) return [];
+  const structured = keys.filter(key => {
+    const child = value[key];
+    return !!child && typeof child === "object";
+  });
+  return structured.length === keys.length ? keys : [];
+}
+function _spv214EpisodeScopedValue(value, mediaType, episode, depth) {
+  const lane = _text(mediaType).trim().toLowerCase();
+  const wanted = Math.floor(Number(episode) || 0);
+  depth = Number(depth) || 0;
+  if ((lane !== "tv" && lane !== "anime") || wanted <= 0 || depth > 10 || value == null) return value;
+
+  if (Array.isArray(value)) {
+    const tagged = value.filter(row => _spv214EpisodeNumber(row) > 0);
+    if (tagged.length) {
+      const exact = tagged.filter(row => _spv214EpisodeNumber(row) === wanted);
+      return exact.length ? exact : null;
+    }
+    return value
+      .map(row => _spv214EpisodeScopedValue(row, lane, wanted, depth + 1))
+      .filter(row => row != null);
+  }
+  if (typeof value !== "object") return value;
+
+  const rowEpisode = _spv214EpisodeNumber(value);
+  if (rowEpisode > 0 && rowEpisode !== wanted) return null;
+
+  const episodeKeys = _spv214EpisodeTableKeys(value);
+  if (episodeKeys.length) {
+    const key = String(wanted);
+    if (!Object.prototype.hasOwnProperty.call(value, key)) return null;
+    return _spv214EpisodeScopedValue(value[key], lane, wanted, depth + 1);
+  }
+
+  const out = {};
+  for (const [key, child] of Object.entries(value).slice(0, 256)) {
+    const scoped = _spv214EpisodeScopedValue(child, lane, wanted, depth + 1);
+    if (scoped != null) out[key] = scoped;
+  }
+  return out;
+}
+function _spv211ProviderIdAllowed(key, rawValue) {
+  const field = _text(key).trim().toLowerCase();
+  const value = _text(rawValue).trim();
+  if (!value || value.length > 160) return false;
+  if (/tracking|analytics|measurement|gtag|google[_-]?tag|pixel|telemetry|client[_-]?id|visitor[_-]?id/i.test(field)) return false;
+  if (/^(?:G-[A-Z0-9]{6,}|GTM-[A-Z0-9-]{4,}|UA-\d+(?:-\d+)?|AW-\d+)$/i.test(value)) return false;
+  return /^[A-Za-z0-9._~-]{1,160}$/.test(value);
+}
+/* NIAKVIO_PROVIDER_CATALOGUE_IDENTITY_CORRELATION_V21_5 */
+function _spv215CatalogueCardValues(value, base, meta, season, mediaType) {
+  const source = _text(value).slice(0, 786432);
+  if (!source) return { id: "", slug: "", score: -1e9 };
+
+  // A title and navigation target from the same search/result/card record are
+  // stronger identity evidence than an unrelated path or data-id elsewhere in
+  // the response. Bound both the number of records and bytes inspected. Search
+  // results may themselves be anchors, so <a class="...search-result..."> is a
+  // first-class record boundary too.
+  const startRe = /<(?:a|div|article|li)\b[^>]*\bclass\s*=\s*(["'])[^"']*(?:search[-_ ]?item|search[-_ ]?result|result[-_ ]?item|catalog(?:ue)?[-_ ]?item|media[-_ ]?item|result[-_ ]?card)[^"']*\1[^>]*>/gi;
+  const starts = [];
+  let match, scanned = 0;
+  while ((match = startRe.exec(source)) !== null && scanned++ < 160) {
+    starts.push({ index: match.index, opening: match[0] });
+  }
+  if (!starts.length) return { id: "", slug: "", score: -1e9 };
+
+  let best = { id: "", slug: "", score: -1e9 };
+  for (let index = 0; index < starts.length; index += 1) {
+    const row = starts[index];
+    const nextIndex = index + 1 < starts.length ? starts[index + 1].index : source.length;
+    const card = source.slice(row.index, Math.min(nextIndex, row.index + 12000));
+    const opening = row.opening;
+
+    let href = "";
+    const directHref = opening.match(/\bhref\s*=\s*(["'])([^"']{1,900})\1/i);
+    if (directHref) href = directHref[2];
+    if (!href) {
+      const click = opening.match(/(?:location\s*\.\s*)?href\s*=\s*['"]([^'"]{1,900})['"]/i);
+      if (click) href = click[1];
+    }
+    if (!href) {
+      const dataHref = opening.match(/\b(?:data-href|data-url|data-link)\s*=\s*(["'])([^"']{1,900})\1/i);
+      if (dataHref) href = dataHref[2];
+    }
+    if (!href) {
+      const anchor = card.match(/<a\b[^>]*\bhref\s*=\s*(["'])([^"']{1,900})\1[^>]*>/i);
+      if (anchor) href = anchor[2];
+    }
+    if (!href) continue;
+
+    let label = "";
+    const title = card.match(/<[^>]*\bclass\s*=\s*(["'])[^"']*(?:search[-_ ]?title|result[-_ ]?title|item[-_ ]?title|card[-_ ]?title|media[-_ ]?title)[^"']*\1[^>]*>([\s\S]{0,2400}?)<\/(?:div|span|p|h[1-6]|a)>/i);
+    if (title) label = _htmlVisibleText(title[2]).replace(/\s+/g, " ").trim();
+    if (!label) continue;
+
+    const score = _spv211CandidateIdentityScore(label, href, meta, mediaType, season);
+    if (score < 90 || score <= best.score) continue;
+
+    let id = "";
+    let slug = "";
+    try {
+      const parsed = new URL(href, base || "https://invalid.local/");
+      const raw = parsed.pathname.split("/").filter(Boolean).pop() || "";
+      const segment = decodeURIComponent(raw).replace(/\.html?$/i, "");
+      if (/^[A-Za-z0-9._~-]{2,160}$/.test(segment)) {
+        slug = segment;
+        const numeric = segment.match(/^(\d{2,})[-_.]/);
+        if (numeric) id = numeric[1];
+      }
+      if (!id) {
+        for (const key of ["newsid", "postid", "post_id", "mediaid", "media_id", "id"]) {
+          const candidate = _text(parsed.searchParams.get(key)).trim();
+          if (_spv211ProviderIdAllowed(key, candidate)) { id = candidate; break; }
+        }
+      }
+    } catch (_) {}
+    if (!id && !slug) continue;
+    best = { id, slug, score };
+  }
+  return best;
+}
+function _spv215CatalogueProviderValues(value, base, meta, season, mediaType) {
+  const fallback = _spv205StrictProviderValues(value, base, meta, season, mediaType) || { id: "", slug: "" };
+  if (typeof value !== "string") return fallback;
+  const card = _spv215CatalogueCardValues(value, base, meta, season, mediaType);
+  if (!card || (!card.id && !card.slug) || card.score < 90) return fallback;
+  return {
+    id: card.id || fallback.id || "",
+    slug: card.slug || fallback.slug || ""
+  };
+}
+function _spv205StrictProviderValues(value, base, meta, season, mediaType) {
+  if (value && typeof value === "object") {
+    const id = _spv18ProviderIdFromJson(value, meta) || "";
+    let slug = "";
+    const rows = _spv4JsonRows(value, [])
+      .map(row => ({
+        row,
+        score: _spv211CandidateIdentityScore(
+          _spv4Scalar(row.title) || _spv4Scalar(row.name) ||
+          _spv4Scalar(row.original_title) || _spv4Scalar(row.post_title) ||
+          _spv4Scalar(row.label) || "",
+          _spv4Scalar(row.url) || _spv4Scalar(row.href) || _spv4Scalar(row.permalink) || "",
+          meta,
+          mediaType,
+          season
+        )
+      }))
+      .filter(item => item.score >= 90)
+      .sort((a,b)=>b.score-a.score)
+      .slice(0, 12);
+    for (const item of rows) {
+      const candidate = _spv4Scalar((item.row || {}).slug);
+      if (candidate && candidate.length <= 160 && /^[A-Za-z0-9._~-]+$/.test(candidate)) {
+        slug = candidate;
+        break;
+      }
+    }
+    return { id, slug };
+  }
+
+  const source = _text(value).slice(0, 786432);
+  let bestScore = -1e9;
+  let best = { id: "", slug: "" };
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match, scanned = 0;
+  while ((match = anchorRe.exec(source)) !== null && scanned++ < 400) {
+    const attrs = _text(match[1]);
+    const label = _htmlVisibleText(match[2]).replace(/\s+/g, " ").trim();
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])([^"']{1,900})\1/i);
+    const href = hrefMatch ? hrefMatch[2] : "";
+    const score = _spv211CandidateIdentityScore(label, href, meta, mediaType, season);
+    if (score < 90 || score < bestScore) continue;
+    let id = "";
+    let slug = "";
+    const idMatch = attrs.match(/\bdata-(id|post-id|media-id|anime-id|movie-id|series-id|show-id)\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/i);
+    if (idMatch && _spv211ProviderIdAllowed(idMatch[1], idMatch[2])) id = idMatch[2];
+    if (href) {
+      try {
+        const parsed = new URL(href, base || "https://invalid.local/");
+        const raw = parsed.pathname.split("/").filter(Boolean).pop() || "";
+        const segment = decodeURIComponent(raw).replace(/\.html?$/i, "");
+        if (/^[A-Za-z0-9._~-]{2,160}$/.test(segment)) {
+          slug = segment;
+          const numeric = segment.match(/^(\d{2,})[-_.]/);
+          if (!id && numeric) id = numeric[1];
+        }
+      } catch (_) {}
+    }
+    if (!id && !slug) continue;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { id, slug };
+    }
+  }
+
+  const pathRe = /(?:https?:\/\/[^\s"'<>]{1,300}\/)?(\d{2,}-[A-Za-z0-9._~-]{2,150})\.html(?:[?#][^\s"'<>]*)?/gi;
+  scanned = 0;
+  while ((match = pathRe.exec(source)) !== null && scanned++ < 240) {
+    const segment = _text(match[1]);
+    const numeric = segment.match(/^(\d{2,})[-_.]/);
+    if (!numeric) continue;
+    const label = segment.replace(/^\d+[-_.]?/, "").replace(/[._-]+/g, " ");
+    const score = _spv211CandidateIdentityScore(label, segment, meta, mediaType, season);
+    if (score < 90 || score < bestScore) continue;
+    bestScore = score;
+    best = { id: numeric[1], slug: segment };
+  }
+
+  let bestId = "";
+  let bestIdCount = 0;
+  const counts = new Map();
+  const attrRe = /\b(?:href|src|data-src)\s*=\s*(["'])([^"']{1,900})\1/gi;
+  scanned = 0;
+  while ((match = attrRe.exec(source)) !== null && scanned++ < 320) {
+    let parsed;
+    try { parsed = new URL(match[2], base || "https://invalid.local/"); }
+    catch (_) { continue; }
+    for (const [rawKey, rawValue] of [...parsed.searchParams.entries()].slice(0, 24)) {
+      const key = _text(rawKey).trim().toLowerCase();
+      const candidate = _text(rawValue).trim();
+      if (!key || !candidate || candidate.length > 160) continue;
+      if (/api[_-]?key|token|auth|authorization|signature|sig|secret|password|cookie|session|nonce|hash|expires?|timestamp|^ts$/i.test(key)) continue;
+      if (/^(?:tmdb|tmdbid|tmdb_id|imdb|imdbid|imdb_id|season|season_number|episode|episode_number|year)$/i.test(key)) continue;
+      if (!/(?:^|[_-])id$|id$/i.test(key)) continue;
+      if (!_spv211ProviderIdAllowed(key, candidate)) continue;
+      const count = (counts.get(candidate) || 0) + 1;
+      counts.set(candidate, count);
+      if (count > bestIdCount) {
+        bestId = candidate;
+        bestIdCount = count;
+      }
+    }
+  }
+  const dataIdRe = /\bdata-((?:id|[a-z0-9_-]*[_-]id))\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/gi;
+  scanned = 0;
+  while ((match = dataIdRe.exec(source)) !== null && scanned++ < 320) {
+    const key = _text(match[1]).trim();
+    const candidate = _text(match[2]).trim();
+    if (!_spv211ProviderIdAllowed(key, candidate)) continue;
+    const count = (counts.get(candidate) || 0) + 1;
+    counts.set(candidate, count);
+    if (count > bestIdCount) {
+      bestId = candidate;
+      bestIdCount = count;
+    }
+  }
+  if (bestId) best.id = bestId;
+  return best;
+}
+function _spv205HttpValues(value, base, out, depth) {
+  out = out || [];
+  depth = Number(depth) || 0;
+  if (out.length >= 160 || depth > 8 || value == null) return out;
+  if (typeof value === "string") {
+    const raw = _text(value).trim();
+    if (!/^https?:\/\//i.test(raw) || raw.length > 4096) return out;
+    try {
+      const parsed = new URL(raw, base || undefined);
+      if (!/^https?:$/i.test(parsed.protocol) || parsed.username || parsed.password) return out;
+      if (/\.(?:jpe?g|png|webp|gif|svg|ico)(?:[?#]|$)/i.test(parsed.pathname)) return out;
+      out.push(parsed.toString());
+    } catch (_) {}
+    return out;
+  }
+  if (Array.isArray(value)) {
+    for (const child of value.slice(0, 160)) {
+      _spv205HttpValues(child, base, out, depth + 1);
+      if (out.length >= 160) break;
+    }
+    return out;
+  }
+  if (typeof value !== "object") return out;
+  let scannedEntries = 0;
+  for (const [rawKey, child] of Object.entries(value)) {
+    if (scannedEntries++ >= 160 || out.length >= 160) break;
+    const key = _text(rawKey).toLowerCase();
+    if (/api[_-]?key|token|auth|authorization|signature|sig|secret|password|cookie|session|nonce|hash|expires?|timestamp|^ts$/i.test(key)) continue;
+    _spv205HttpValues(child, base, out, depth + 1);
+  }
+  return out;
+}
+function _spv204ResponseProviderValues(value, base, meta) {
+  if (value && typeof value === "object") {
+    return _spv20ProviderValuesFromJson(value, meta) || { id: "", slug: "" };
+  }
+  const source = _text(value).slice(0, 786432);
+  let pair = _spv20ProviderValuesFromHtml(source, meta) || { id: "", slug: "" };
+  let bestId = "";
+  let bestIdCount = 0;
+  const idCounts = new Map();
+
+  const attrRe = /\b(?:href|src|data-src)\s*=\s*(["'])([^"']{1,900})\1/gi;
+  let match, scanned = 0;
+  while ((match = attrRe.exec(source)) !== null && scanned++ < 320) {
+    let parsed;
+    try { parsed = new URL(match[2], base || "https://invalid.local/"); }
+    catch (_) { continue; }
+    for (const [rawKey, rawValue] of [...parsed.searchParams.entries()].slice(0, 24)) {
+      const key = _text(rawKey).trim().toLowerCase();
+      const candidate = _text(rawValue).trim();
+      if (!key || !candidate || candidate.length > 160) continue;
+      if (/api[_-]?key|token|auth|authorization|signature|sig|secret|password|cookie|session|nonce|hash|expires?|timestamp|^ts$/i.test(key)) continue;
+      if (/^(?:tmdb|tmdbid|tmdb_id|imdb|imdbid|imdb_id|season|season_number|episode|episode_number|year)$/i.test(key)) continue;
+      if (!/(?:^|[_-])id$|id$/i.test(key)) continue;
+      if (!/^[A-Za-z0-9._~-]{1,160}$/.test(candidate)) continue;
+      const count = (idCounts.get(candidate) || 0) + 1;
+      idCounts.set(candidate, count);
+      if (count > bestIdCount) {
+        bestId = candidate;
+        bestIdCount = count;
+      }
+    }
+  }
+
+  const dataIdRe = /\bdata-(?:id|[a-z0-9_-]*[_-]id)\s*=\s*["']?([A-Za-z0-9._~-]{1,160})/gi;
+  scanned = 0;
+  while ((match = dataIdRe.exec(source)) !== null && scanned++ < 320) {
+    const candidate = _text(match[1]).trim();
+    if (!candidate) continue;
+    const count = (idCounts.get(candidate) || 0) + 1;
+    idCounts.set(candidate, count);
+    if (count > bestIdCount) {
+      bestId = candidate;
+      bestIdCount = count;
+    }
+  }
+
+  if (bestId) pair.id = bestId;
+  if (!pair.slug) pair.slug = pair.id || "";
+  return pair;
+}
+/* NIAKVIO_PROVIDER_PLAYER_FALLBACK_V21_6 */
+function _spv216PlayerFallbackEligible(rawUrl) {
+  const value = _text(rawUrl).trim();
+  if (!/^https?:\/\//i.test(value)) return false;
+  if (_directMedia(value) || _playerLike(value)) return true;
+  try {
+    const parsed = new URL(value);
+    const host = _text(parsed.hostname).toLowerCase();
+    if (/(?:sibnet|vidmoly|streamtape|sendvid|vidoza|myvi)/i.test(host)) return true;
+    for (const key of parsed.searchParams.keys()) {
+      if (/^(?:video|videoid|video_id|file|fileid|file_id|embed|embedid|embed_id|player|playerid|player_id|stream|streamid|stream_id|source|sourceid|source_id)$/i.test(key)) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+function _spv216FallbackReferer(stepSpec, stepBase) {
+  const headers = stepSpec && stepSpec.headers && typeof stepSpec.headers === "object"
+    ? stepSpec.headers : {};
+  return _text(headers.Referer || headers.referer || stepBase || "");
+}
+/* NIAKVIO_PROVIDER_PLAYER_FALLBACK_V21_7 */
+function _spv216FallbackStreams(rows) {
+  const out = [];
+  const seen = new Set();
+  for (const row of Array.isArray(rows) ? rows.slice(0, 12) : []) {
+    const url = _text(row && row.url).trim();
+    if (!url || seen.has(url) || !_spv216PlayerFallbackEligible(url)) continue;
+    seen.add(url);
+    const emitted = _streams([url], _text(row && row.referer));
+    for (const stream of emitted) {
+      if (!_directMedia(url) && stream && typeof stream === "object") {
+        stream.__nuvioCorrelatedPlayerFallbackV1 = { url };
+      }
+      out.push(stream);
+    }
+    if (out.length >= 12) break;
+  }
+  return out.slice(0, 12);
+}
+async function _resolveProviderValuePlan(meta, mediaType, season, episode) {
+  const plans = Array.isArray(NIAKVIO_PROVIDER_MODEL.providerValuePlan)
+    ? NIAKVIO_PROVIDER_MODEL.providerValuePlan : [];
+  if (!plans.length || !meta || !meta.title) return [];
+  const media = _mediaNamespace(mediaType);
+  const baseValues = {
+    query: _text(meta.title),
+    providerId: "",
+    tmdbId: _text(meta.tmdbId),
+    imdbId: _text(meta.imdbId),
+    media,
+    season,
+    episode,
+    source: null
+  };
+  for (const plan of plans.slice(0, 12)) {
+    const lanes = Array.isArray(plan && plan.semanticTypes) ? plan.semanticTypes : [];
+    if (!_spv185PlanLaneAllowed(lanes, mediaType)) {
+      _spv184Trace("lane_skip", mediaType, "", -1, "");
+      continue;
+    }
+    _spv184Trace("plan_selected", mediaType, "", -1, _text(plan && plan.searchRoute));
+    const searchBase = _text(plan && plan.searchBase);
+    const searchRoute = _text(plan && plan.searchRoute);
+    if (!/^https?:\/\//i.test(searchBase) || !searchRoute) continue;
+    const searchUrl = _recipeUrl(searchRoute, baseValues, searchBase);
+    if (!searchUrl) continue;
+    try {
+      const searchSpec = _recipeRequestSpec(
+        { providerValueSearch: plan.searchRequestSpec || { method: "GET" } },
+        "providerValueSearch",
+        baseValues
+      );
+      const searchPayload = await _recipePayload(searchUrl, {}, searchSpec, baseValues);
+      /* NIAKVIO_PROVIDER_CORRELATED_VALUE_JSON_TEXT_V18_4 */
+      /* NIAKVIO_PROVIDER_RESPONSE_VALUE_CORRELATION_V20_2 */
+      let providerValues = { id: "", slug: "" };
+      if (typeof searchPayload.value === "string") {
+        const rawSearchValue = _text(searchPayload.value).trim();
+        if (rawSearchValue && rawSearchValue.length <= 4 * 1024 * 1024 && /^[\[{]/.test(rawSearchValue)) {
+          try {
+            providerValues = _spv20ProviderValuesFromJson(JSON.parse(rawSearchValue), meta);
+          } catch (_) {}
+        }
+        if (!providerValues || (!providerValues.id && !providerValues.slug)) {
+          providerValues = _spv20ProviderValuesFromHtml(rawSearchValue, meta);
+        }
+      } else {
+        providerValues = _spv20ProviderValuesFromJson(searchPayload.value, meta);
+      }
+      providerValues = _spv215CatalogueProviderValues(
+        searchPayload.value,
+        searchPayload.base || searchUrl,
+        meta,
+        season,
+        mediaType
+      ) || { id: "", slug: "" };
+      const providerTraceId = providerValues.id || providerValues.slug || "";
+      _spv184Trace(providerTraceId ? "identity_hit" : "identity_miss", mediaType, providerTraceId, -1, searchRoute);
+      if (!providerValues.id && !providerValues.slug) continue;
+      let values = Object.assign({}, baseValues, {
+        providerId: providerValues.id || "",
+        /* NIAKVIO_PROVIDER_RESPONSE_VALUE_VALIDATOR_COMPAT_V20_5_1
+         legacy ownership signatures only; NOT executable runtime:
+         providerSlug: providerValues.slug || providerValues.id
+         providerSlug: providerValues.slug || providerValues.id || providerId
+         const nextProviderValues = _spv204ResponseProviderValues(
+         providerId: nextProviderValues.id || values.providerId
+         providerSlug: nextProviderValues.slug || values.providerSlug
+         _spv184Trace("step_fetch", mediaType, values.providerId, stepIndex, stepRoute);
+      */
+      providerSlug: providerValues.slug || ""
+      });
+      const valueSteps = (plan.steps || []).slice(0, 8);
+      const completedSteps = new Set();
+      const playerFallbacks = [];
+      for (let dependencyPass = 0; dependencyPass < valueSteps.length + 1; dependencyPass += 1) {
+        let progressed = false;
+        for (let stepIndex = 0; stepIndex < valueSteps.length; stepIndex += 1) {
+          if (completedSteps.has(stepIndex)) continue;
+          const step = valueSteps[stepIndex];
+          const stepBase = _text(step && step.base);
+          const stepRoute = _text(step && step.route);
+          if (!/^https?:\/\//i.test(stepBase) || !stepRoute || !/\{(?:id|slug)\}/i.test(stepRoute)) {
+            completedSteps.add(stepIndex);
+            _spv184Trace("step_shape_rejected", mediaType, values.providerId, stepIndex, stepRoute);
+            continue;
+          }
+          const needsId = /\{id\}/i.test(stepRoute);
+          const needsSlug = /\{slug\}/i.test(stepRoute);
+          if ((needsId && !values.providerId) || (needsSlug && !values.providerSlug)) {
+            _spv184Trace("step_deferred", mediaType, values.providerId || values.providerSlug, stepIndex, stepRoute);
+            continue;
+          }
+          completedSteps.add(stepIndex);
+          progressed = true;
+          const stepUrl = _recipeUrl(stepRoute, values, stepBase);
+          if (!stepUrl) {
+            _spv184Trace("step_url_empty", mediaType, values.providerId, stepIndex, stepRoute);
+            continue;
+          }
+          _spv184Trace("step_fetch", mediaType, values.providerId || values.providerSlug, stepIndex, stepRoute);
+          const stepSpec = _recipeRequestSpec(
+            { providerValueStep: step.requestSpec || { method: "GET" } },
+            "providerValueStep",
+            values
+          );
+          let payload;
+          try {
+            payload = await _recipePayload(stepUrl, {}, stepSpec, values);
+          } catch (_) {
+            if (_spv216PlayerFallbackEligible(stepUrl)) {
+              const fallbackReferer = _spv216FallbackReferer(stepSpec, stepBase);
+              if (!playerFallbacks.some(row => row.url === stepUrl)) {
+                playerFallbacks.push({ url: stepUrl, referer: fallbackReferer });
+              }
+              _spv184Trace("step_player_fallback", mediaType, values.providerId || values.providerSlug, stepIndex, stepRoute);
+            }
+            continue;
+          }
+          _spv184Trace("step_response", mediaType, values.providerId || values.providerSlug, stepIndex, stepRoute);
+          const nextProviderValues = _spv205StrictProviderValues(
+            payload.value,
+            payload.base || stepUrl,
+            meta,
+            season,
+            mediaType
+          ) || { id: "", slug: "" };
+          if (nextProviderValues.slug) {
+            nextProviderValues.slug = _spv213StableSeriesSlug(
+              values.providerSlug,
+              nextProviderValues.slug,
+              mediaType,
+              valueSteps,
+              completedSteps,
+              stepIndex
+            );
+          }
+          if (nextProviderValues.id || nextProviderValues.slug) {
+            values = Object.assign({}, values, {
+              providerId: nextProviderValues.id || values.providerId,
+              providerSlug: nextProviderValues.slug || values.providerSlug
+            });
+          }
+          const scopedPayloadValue = _spv214EpisodeScopedValue(payload.value, mediaType, episode, 0);
+          let urls = [];
+        if (typeof scopedPayloadValue === "string") {
+          urls = _uniq([
+            ..._extractUrls(scopedPayloadValue, payload.base),
+            ..._spv15ExplicitPlayerAttrs(payload.value, payload.base)
+          ]);
+        } else {
+          urls = _uniq([
+            ..._jsonUrls(scopedPayloadValue),
+            ..._sourceUrls(scopedPayloadValue, payload.base),
+            ..._spv18ValueUrls(scopedPayloadValue, payload.base, []),
+            ..._spv205HttpValues(scopedPayloadValue, payload.base, [])
+          ]);
+        }
+        const direct = urls.filter(_directMedia);
+        if (direct.length) return _streams(direct, payload.base || stepUrl).slice(0, 40);
+        const crawl = urls.filter(_crawlEligible).sort((a,b)=>_crawlUrlScore(b)-_crawlUrlScore(a));
+        if (crawl.length) {
+          const streams = await _crawlDirectMedia(crawl.slice(0, 10), payload.base || stepUrl, 3);
+          if (streams.length) return streams.slice(0, 40);
+        }
+        }
+        if (!progressed) break;
+      }
+      if (playerFallbacks.length) {
+        const fallbackStreams = _spv216FallbackStreams(playerFallbacks);
+        if (fallbackStreams.length) return fallbackStreams;
+      }
+    } catch (_) {}
+  }
+  return [];
+}
+async function _resolveSearchRequestPlan(meta, mediaType, season, episode) {
+  const plans = Array.isArray(NIAKVIO_PROVIDER_MODEL.searchRequestPlan)
+    ? NIAKVIO_PROVIDER_MODEL.searchRequestPlan : [];
+  if (!plans.length || !meta || !meta.title) return [];
+  const media = _mediaNamespace(mediaType);
+  const values = {
+    query: _text(meta.title),
+    providerId: _text(meta.tmdbId),
+    tmdbId: _text(meta.tmdbId),
+    imdbId: _text(meta.imdbId),
+    media,
+    year: _text(meta.year),
+    season,
+    episode,
+    source: null
+  };
+  for (const plan of plans.slice(0, 6)) {
+    const lanes = Array.isArray(plan && plan.semanticTypes) ? plan.semanticTypes : [];
+    if (!_spv185PlanLaneAllowed(lanes, mediaType)) continue;
+    const base = _text(plan && plan.base);
+    const route = _text(plan && plan.route);
+    if (!/^https?:\/\//i.test(base) || !route) continue;
+    const url = _recipeUrl(route, values, base);
+    if (!url) continue;
+    try {
+      const requestSpec = _recipeRequestSpec(
+        { searchPlanRequest: plan.requestSpec || { method: "GET" } },
+        "searchPlanRequest",
+        values
+      );
+      const payload = await _recipePayload(url, {}, requestSpec, values);
+      const directUrls = typeof payload.value === "string"
+        ? _extractUrls(payload.value, payload.base).filter(_directMedia)
+        : _sourceUrls(payload.value, payload.base).filter(_directMedia);
+      if (directUrls.length) return _streams(_uniq(directUrls), payload.base || url).slice(0, 40);
+
+      const details = typeof payload.value === "string"
+        ? _spv4HtmlDetails(payload.value, payload.base, meta, mediaType, season)
+        : _spv4JsonDetails(
+            payload.value,
+            payload.base,
+            meta,
+            mediaType,
+            season,
+            episode,
+            NIAKVIO_PROVIDER_MODEL.sourceRuntimeFamily
+          );
+      if (details.length) {
+        const family = _spv4Family();
+        for (const detailUrl of _uniq(details).slice(0, 8)) {
+          const detailStreams = await _spv4ResolveDetail(
+            detailUrl,
+            meta,
+            mediaType,
+            season,
+            episode,
+            family
+          );
+          if (Array.isArray(detailStreams) && detailStreams.length) return detailStreams.slice(0, 40);
+        }
+        const crawled = await _crawlDirectMedia(_uniq(details).slice(0, 8), payload.base || url, 3);
+        if (crawled.length) return crawled.slice(0, 40);
+      }
+    } catch (_) {}
+  }
+  return [];
+}
+async function _resolveExternalIdentityPlan(meta, mediaType, season, episode) {
+  const plans = Array.isArray(NIAKVIO_PROVIDER_MODEL.externalIdentityPlan)
+    ? NIAKVIO_PROVIDER_MODEL.externalIdentityPlan : [];
+  if (!plans.length || !meta || !meta.imdbId) return [];
+  const media = _mediaNamespace(mediaType);
+  const values = {
+    query: _text(meta.title),
+    providerId: _text(meta.tmdbId),
+    tmdbId: _text(meta.tmdbId),
+    imdbId: _text(meta.imdbId),
+    media,
+    season,
+    episode,
+    source: null
+  };
+  for (const plan of plans.slice(0, 4)) {
+    const base = _substituteDomain(_text(plan && plan.base));
+    const route = _text(plan && plan.route);
+    if (!base || !route || !/\{imdb_?id\}/i.test(route)) continue;
+    const url = _recipeUrl(route, values, base);
+    if (!url) continue;
+    try {
+      const requestSpec = _recipeRequestSpec(
+        { externalIdentityRequest: plan.requestSpec || { method: "GET" } },
+        "externalIdentityRequest",
+        values
+      );
+      const payload = await _recipePayload(url, {}, requestSpec, values);
+      const urls = typeof payload.value === "string"
+        ? _extractUrls(payload.value, payload.base)
+        : _sourceUrls(payload.value, payload.base);
+      const direct = _uniq(urls.filter(_directMedia));
+      if (direct.length) {
+        let selected = direct;
+        if (media !== "movie" && season != null && episode != null) {
+          const classified = direct.map(value => ({ value, marker: _externalEpisodeMarker(value, season, episode) }));
+          const marked = classified.filter(row => row.marker.marked);
+          selected = marked.filter(row => row.marker.matches).map(row => row.value);
+          if (!marked.length) selected = [];
+        }
+        if (selected.length) {
+          return _streams(selected, payload.base || url, _externalPlaybackHeaders(requestSpec)).slice(0, 40);
+        }
+      }
+      const nested = _uniq(urls.filter(_crawlEligible)).slice(0, 10);
+      if (nested.length) {
+        const crawled = await _crawlDirectMedia(nested, payload.base || url, 2);
+        if (crawled.length) return crawled;
+      }
+    } catch (_) {}
+  }
+  return [];
+}
 async function getStreams(tmdbId, mediaType, season, episode) {
   const type = String(mediaType || "movie").toLowerCase();
   if (NIAKVIO_PROVIDER_MODEL.supportedTypes.length &&
@@ -1803,6 +3271,24 @@ async function getStreams(tmdbId, mediaType, season, episode) {
   }
   if (!_runtimePlanAvailable()) return [];
   const strategy = NIAKVIO_PROVIDER_MODEL.strategy;
+
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.providerValuePlan) && NIAKVIO_PROVIDER_MODEL.providerValuePlan.length) {
+    const providerValueMeta = await _tmdb(tmdbId, type) || null;
+    const providerValueStreams = await _resolveProviderValuePlan(providerValueMeta, type, season, episode);
+    if (providerValueStreams.length) return providerValueStreams;
+  }
+
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.searchRequestPlan) && NIAKVIO_PROVIDER_MODEL.searchRequestPlan.length) {
+    const searchMeta = await _tmdb(tmdbId, type) || null;
+    const searchStreams = await _resolveSearchRequestPlan(searchMeta, type, season, episode);
+    if (searchStreams.length) return searchStreams;
+  }
+
+  if (Array.isArray(NIAKVIO_PROVIDER_MODEL.externalIdentityPlan) && NIAKVIO_PROVIDER_MODEL.externalIdentityPlan.length) {
+    const externalMeta = await _tmdb(tmdbId, type) || null;
+    const externalStreams = await _resolveExternalIdentityPlan(externalMeta, type, season, episode);
+    if (externalStreams.length) return externalStreams;
+  }
 
   // Declarative ProviderBase recipe: a clean reconstruction may need a bounded
   // search -> provider-id -> source chain. This remains data-driven and executes
@@ -1849,6 +3335,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
   }
   return [];
 }
+/* NIAKVIO_PROVIDER_SOURCE_PLAN_V10 */
 /* NIAKVIO_PROVIDER_BASE_SOURCE_PLAN_V4 */
 /* NIAKVIO_PROVIDER_BASE_RUNTIME_V5 */
 /* NIAKVIO_PROVIDER_BASE_RUNTIME_V6 */
@@ -1930,14 +3417,16 @@ function _spv4IsDetailRoute(route, family) {
   return /\{(?:slug|id|imdbid|imdb_id|tmdbid|tmdb_id|season|episode)\}/i.test(value) ||
     /\/(?:anime|animes|movie|movies|film|films|serie|series|voir-series|episode|saison|season|saga|catalogue|watch)(?:[/?#.-]|$)/i.test(value);
 }
-function _spv4SameProviderOrigin(url) {
+function _spv4SameProviderOrigin(url, currentBase) {
 const candidate = _origin(_substituteDomain(url));
+const current = _origin(_substituteDomain(currentBase));
+if (candidate && current && candidate === current) return true;
 return !!candidate && _runtimeBases().some(base => _origin(_substituteDomain(base)) === candidate);
 }
 function _spv4AttrUrls(text, base) {
   const out = [];
   const value = _embeddedText(text);
-  const re = /(?:src|href|file|url|data-[a-z0-9_:-]+)\s*=\s*["']([^"']+)["']/gi;
+  const re = /(?:src|href|file|url|data-(?:src|url|video|embed|player|file|stream|link|href))\s*=\s*["']([^"']+)["']/gi;
   let match;
   while ((match = re.exec(value)) !== null) {
     const absolute = _absolute(match[1], base);
@@ -1946,8 +3435,24 @@ function _spv4AttrUrls(text, base) {
   }
   return _uniq(out.concat(_extractUrls(value, base)));
 }
-function _spv4UrlScore(url, meta) {
-  let score = _candidateScore(url, meta);
+function _spv10SeasonUrlScore(url, mediaType, season) {
+  if (mediaType === "movie" || season == null) return 0;
+  let path = "";
+  try { path = decodeURIComponent(new URL(url).pathname || "").toLowerCase(); } catch (_) { return 0; }
+  const wanted = Math.max(1, Number(season) || 1);
+  let observed = null;
+  const match = path.match(/(?:season|saison)[-_ /]*(\d{1,3})|(?:^|[-_/])(\d{1,3})(?:st|nd|rd|th)[-_ ]*season(?:[-_/]|$)|(?:^|[-_/])s(\d{1,3})(?:[-_/]|$)/i);
+  if (match) observed = Number(match[1] || match[2] || match[3] || 0) || null;
+  if (observed == null) return 0;
+  return observed === wanted ? 180 : -320;
+}
+function _spv4UrlScore(url, meta, mediaType, season) {
+  let score = _candidateScore(url, meta) + _spv10SeasonUrlScore(url, mediaType, season);
+  try {
+    const path = decodeURIComponent(new URL(url).pathname || "").toLowerCase();
+    if (mediaType !== "movie" && /(?:^|[-_/])(?:movie|film|specials?|ova|ona)(?:[-_/]|$)/i.test(path)) score -= 220;
+    if (mediaType === "movie" && /(?:season|saison)[-_ /]*\d{1,3}|(?:^|[-_/])s\d{1,3}(?:[-_/]|$)/i.test(path)) score -= 220;
+  } catch (_) {}
   try {
     const path = decodeURIComponent(new URL(url).pathname || "").toLowerCase();
     const wanted = _spv4Titles(meta).map(_slug).filter(Boolean);
@@ -1970,15 +3475,118 @@ if (/\.(?:css|js|jpe?g|png|gif|webp|svg|avif|ico|woff2?|ttf)(?:[?#]|$)/i.test(pa
 return true;
 } catch (_) { return false; }
 }
-function _spv4HtmlDetails(html, base, meta) {
-return _spv4AttrUrls(html, base)
-.filter(_spv4SameProviderOrigin)
-.filter(_spv7DetailUrlEligible)
-.map(url => ({ url: _substituteDomain(url), score: _spv4UrlScore(url, meta) }))
-.filter(row => row.score >= 36)
-.sort((a, b) => b.score - a.score)
-.map(row => row.url)
-.slice(0, 8);
+/* NIAKVIO_PROVIDER_SEARCH_REQUEST_PLAN_V14_1 */
+function _spv14LabelScoreForUrl(html, base, targetUrl, meta, mediaType, season) {
+  const target = _text(targetUrl);
+  if (!target) return 0;
+  const expectedYear = _text(meta && meta.year).slice(0, 4);
+  const source = _text(html);
+  const pattern = /<a\b([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
+  let best = 0;
+  let match;
+  while ((match = pattern.exec(source))) {
+    const candidate = _absolute(match[2], base);
+    if (!candidate || candidate !== target) continue;
+    const label = _htmlVisibleText(match[4]);
+    if (!label) continue;
+    let score = _spv4TitleScore(label, meta);
+    // A loose token overlap cannot promote a catalogue result by itself.
+    if (score < 90) continue;
+    const observedYearMatch = label.match(/\b(?:19|20)\d{2}\b/);
+    const observedYear = observedYearMatch ? observedYearMatch[0] : "";
+    if (mediaType === "movie" && expectedYear && observedYear && observedYear !== expectedYear) continue;
+    if (expectedYear && observedYear === expectedYear) score += 40;
+    const attrs = _text(match[1]) + " " + _text(match[3]);
+    if (/\brel\s*=\s*["'][^"']*\bbookmark\b/i.test(attrs)) score += 24;
+    score += _spv10SeasonUrlScore(candidate, mediaType, season);
+    best = Math.max(best, score);
+  }
+  return best;
+}
+/* NIAKVIO_PROVIDER_SOURCE_PLAN_V15 */
+function _spv15ExplicitPlayerAttrs(html, base) {
+  const out = [];
+  const source = _embeddedText(html);
+  const re = /\bdata-(?:video|embed|player|src|url|file|stream|link|href)\s*=\s*["']([^"']+)["']/gi;
+  let match;
+  while ((match = re.exec(source)) !== null) {
+    const absolute = _absolute(match[1], base);
+    if (absolute && /^https?:/i.test(absolute)) out.push(absolute);
+    if (out.length >= 32) break;
+  }
+  return _uniq(out);
+}
+/* NIAKVIO_PROVIDER_SEARCH_DETAIL_BRIDGE_V17 */
+function _spv17CurrentResponseUrl(value, base) {
+  try {
+    const raw = new URL(value, base).toString();
+    const current = new URL(base).origin;
+    if (new URL(raw).origin === current) return raw;
+  } catch (_) {}
+  return _absolute(value, base);
+}
+function _spv15ArticleDetails(html, base, meta, mediaType, season) {
+  const out = [];
+  const source = _text(html);
+  const expectedYear = _text(meta && meta.year).slice(0, 4);
+  const articleRe = /<article\b[^>]*>[\s\S]{0,12000}?<\/article>/gi;
+  let article;
+  while ((article = articleRe.exec(source)) !== null) {
+    const block = article[0];
+    const visible = _htmlVisibleText(block).replace(/\s+/g, " ").trim();
+    let identityScore = _spv4TitleScore(visible, meta);
+    if (identityScore < 90) continue;
+    const years = [];
+    const yearRe = /\b(?:19|20)\d{2}\b/g;
+    let yearMatch;
+    while ((yearMatch = yearRe.exec(visible)) !== null) {
+      if (!years.includes(yearMatch[0])) years.push(yearMatch[0]);
+      if (years.length >= 6) break;
+    }
+    if (mediaType === "movie" && expectedYear && years.length && !years.includes(expectedYear)) continue;
+    if (expectedYear && years.includes(expectedYear)) identityScore += 40;
+    const hrefRe = /<a\b([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>/gi;
+    let link;
+    while ((link = hrefRe.exec(block)) !== null) {
+      const url = _spv17CurrentResponseUrl(link[2], base);
+      if (!url || !_spv4SameProviderOrigin(url, base) || !_spv7DetailUrlEligible(url)) continue;
+      const attrs = _text(link[1]) + " " + _text(link[3]);
+      const bookmark = /\brel\s*=\s*["'][^"']*\bbookmark\b/i.test(attrs);
+      const urlScore = _spv4UrlScore(url, meta, mediaType, season);
+      if (!bookmark && urlScore < 36) continue;
+      out.push({
+        url,
+        score: Math.max(identityScore, urlScore) + (bookmark ? 24 : 0) + _spv10SeasonUrlScore(url, mediaType, season)
+      });
+      if (out.length >= 24) break;
+    }
+    if (out.length >= 24) break;
+  }
+  return out;
+}
+function _spv4HtmlDetails(html, base, meta, mediaType, season) {
+  const rows = _spv4AttrUrls(html, base)
+    .filter(url => _spv4SameProviderOrigin(url, base))
+    .filter(_spv7DetailUrlEligible)
+    .map(url => ({
+      url: _spv17CurrentResponseUrl(url, base),
+      score: Math.max(
+        _spv4UrlScore(url, meta, mediaType, season),
+        _spv14LabelScoreForUrl(html, base, url, meta, mediaType, season)
+      )
+    }))
+    .filter(row => row.score >= 36);
+  rows.push(..._spv15ArticleDetails(html, base, meta, mediaType, season));
+  const best = new Map();
+  for (const row of rows) {
+    if (!row || !row.url) continue;
+    const previous = best.get(row.url);
+    if (!previous || Number(row.score || 0) > Number(previous.score || 0)) best.set(row.url, row);
+  }
+  return [...best.values()]
+    .sort((a, b) => b.score - a.score)
+    .map(row => row.url)
+    .slice(0, 8);
 }
 function _spv4JsonRows(value, out) {
   out = out || [];
@@ -2077,7 +3685,7 @@ async function _spv4FindDetails(meta, mediaType, season, episode, family) {
         try {
           const payload = await _spv4SearchResponse(url, query, family);
           if (payload.json != null) out.push(..._spv4JsonDetails(payload.json, payload.base, meta, mediaType, season, episode, family));
-          else out.push(..._spv4HtmlDetails(payload.text, payload.base, meta));
+          else out.push(..._spv4HtmlDetails(payload.text, payload.base, meta, mediaType, season));
         } catch (_) {}
         if (out.length) break;
       }
@@ -2086,9 +3694,19 @@ async function _spv4FindDetails(meta, mediaType, season, episode, family) {
     if (out.length) break;
   }
 
+  // NIAKVIO_PROVIDER_BASE_EXTERNAL_IDENTITY_ROUTE_V11
+  // External-ID catalogues may have no title search endpoint. Core already owns
+  // TMDB -> IMDb metadata resolution, so execute only routes whose `{imdbId}`
+  // placeholder was proof-derived from a prior response.
+  const detailRoutes = _spv4Routes().filter(route => _spv4IsDetailRoute(route, family));
+  if (meta && meta.imdbId) {
+    for (const route of detailRoutes) {
+      if (!/\{imdb_?id\}/i.test(route)) continue;
+      out.push(..._spv4Expand(route, meta, {}, mediaType, season, episode));
+    }
+  }
   // Slug-driven catalogues (Sekai and similar) do not expose a search endpoint.
   // Generate only deterministic title slugs from Core metadata.
-  const detailRoutes = _spv4Routes().filter(route => _spv4IsDetailRoute(route, family));
   for (const title of _spv4Titles(meta).slice(0, 3)) {
     const slug = _slug(title);
     if (!slug) continue;
@@ -2366,6 +3984,8 @@ async function _spv4ResolveDetail(detailUrl, meta, mediaType, season, episode, f
     const patterns = [
       new RegExp("/saison[-_/]?0*" + s + "[^?#]*episode[-_/]?0*" + e + "(?:[./?#]|$)", "i"),
       new RegExp("/0*" + s + "-saison/0*" + e + "-episode(?:[./?#]|$)", "i"),
+      new RegExp("/episode/[^?#/]*-(?:saison-)?0*" + s + "-episode-0*" + e + "(?:[./?#-]|$)", "i"),
+      new RegExp("/[^?#/]*-(?:saison-)?0*" + s + "-episode-0*" + e + "(?:[./?#-]|$)", "i"),
       new RegExp("/episode[-_/]?0*" + e + "(?:[./?#]|$)", "i")
     ];
     const episodeLinks = urls.filter(url => patterns.some(pattern => pattern.test(url))).slice(0, 3);
@@ -2468,10 +4088,25 @@ async function _spv4GetStreams(tmdbId, mediaType, season, episode) {
 const family = _spv4Family();
 const type = _text(mediaType || "movie").toLowerCase();
 /* NIAKVIO_PROVIDER_BASE_API_RECIPE_FIRST_V8 */
-if (NIAKVIO_PROVIDER_MODEL.apiRecipe) {
-const recipePrimary = await getStreams(tmdbId, type, season, episode);
-if (Array.isArray(recipePrimary) && recipePrimary.length) return recipePrimary;
-if (NIAKVIO_PROVIDER_MODEL.apiRecipe.allowGenericFallback !== true) return [];
+/* NIAKVIO_PROVIDER_EXECUTION_AUTHORITY_V16 */
+/* NIAKVIO_PROVIDER_CORRELATED_VALUE_AUTHORITY_V18_2 */
+const hasProofValue = Array.isArray(NIAKVIO_PROVIDER_MODEL.providerValuePlan) && NIAKVIO_PROVIDER_MODEL.providerValuePlan.length > 0;
+const hasProofRecipe = !!NIAKVIO_PROVIDER_MODEL.apiRecipe;
+const hasProofSearch = Array.isArray(NIAKVIO_PROVIDER_MODEL.searchRequestPlan) && NIAKVIO_PROVIDER_MODEL.searchRequestPlan.length > 0;
+let proofMeta = null;
+if (hasProofValue || hasProofRecipe || hasProofSearch) proofMeta = await _tmdb(tmdbId, type);
+if (hasProofValue && proofMeta && proofMeta.title) {
+  const valuePrimary = await _resolveProviderValuePlan(proofMeta, type, season, episode);
+  if (Array.isArray(valuePrimary) && valuePrimary.length) return valuePrimary;
+}
+if (hasProofRecipe) {
+  const recipePrimary = await _resolveApiRecipe(proofMeta, type, season, episode);
+  if (Array.isArray(recipePrimary) && recipePrimary.length) return recipePrimary;
+  if (NIAKVIO_PROVIDER_MODEL.apiRecipe.allowGenericFallback !== true) return [];
+}
+if (hasProofSearch && proofMeta && proofMeta.title) {
+  const searchPrimary = await _resolveSearchRequestPlan(proofMeta, type, season, episode);
+  if (Array.isArray(searchPrimary) && searchPrimary.length) return searchPrimary;
 }
 if (family === "stremio-json") {
 const stremio = await _spv5Stremio(tmdbId, type, season, episode);

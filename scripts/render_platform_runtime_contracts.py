@@ -16,6 +16,7 @@ LABELS = {
     "scraper_id": "SCRAPER_ID",
     "scraper_settings": "SCRAPER_SETTINGS",
     "tmdb_api_key": "TMDB_API_KEY",
+    "media_identity_hydration": "Hydratation identité TMDB ↔ IMDb",
     "fetch_bridge": "fetch / bridge natif",
     "http_stack": "Pile HTTP",
     "proxy_policy": "Politique proxy",
@@ -60,6 +61,25 @@ def load_contract() -> dict:
     if missing_labels:
         raise SystemExit(f"missing renderer labels: {','.join(missing_labels)}")
 
+    identity = data.get("media_identity_contract")
+    if not isinstance(identity, dict):
+        raise SystemExit("platform runtime contract requires media_identity_contract")
+    for key in (
+        "canonical_context_imdb_path",
+        "canonical_metadata_cache_global",
+        "canonical_metadata_cache_entry_shape",
+        "cache_population_timing",
+        "rule",
+    ):
+        if not str(identity.get(key) or "").strip():
+            raise SystemExit(f"media identity contract missing {key}")
+    if identity.get("positional_tmdb_id_is_complete_identity") is not False:
+        raise SystemExit("media identity contract must keep positional TMDB id incomplete")
+    if identity.get("user_tmdb_credential_required") is not False:
+        raise SystemExit("media identity contract must not require end-user TMDB credential")
+    if identity.get("secret_projection_to_provider_javascript") is not False:
+        raise SystemExit("media identity contract forbids secret projection into provider JS")
+
     for client_id, client in clients.items():
         for key in ("display_name", "family", "source_repository", "source_branch", "source_ref", "audit_status", "audited_at"):
             if not client.get(key):
@@ -103,8 +123,6 @@ def difference_cell(capabilities: list[dict]) -> str:
 
     states = {str(capability.get("state") or "") for capability in capabilities}
     hard_states = states & HARD_DIFFERENCE_STATES
-    # A uniformly absent capability is not a cross-device difference; that case
-    # already returned above. A subset missing/incompatible/stale is a real gap.
     if hard_states:
         labels = []
         if "absent" in hard_states:
@@ -122,6 +140,7 @@ def render(data: dict) -> str:
     clients = data["clients"]
     ids = list(clients)
     order = data["capability_order"]
+    identity = data["media_identity_contract"]
     lines = [
         "# Contrat runtime Nuvio — comparaison par device",
         "",
@@ -149,6 +168,17 @@ def render(data: dict) -> str:
         )
 
     lines += [
+        "",
+        "## Contrat canonique d'identité média",
+        "",
+        "Le paramètre positionnel `tmdbId` de `getStreams(tmdbId, mediaType, season, episode)` est un **transport d'identifiant**, pas l'identité média complète.",
+        "",
+        f"- Chemin IMDb canonique du contexte : `{esc(identity['canonical_context_imdb_path'])}`.",
+        f"- Cache metadata partagé canonique : `{esc(identity['canonical_metadata_cache_global'])}` avec entrée `{esc(identity['canonical_metadata_cache_entry_shape'])}`.",
+        f"- Timing d'un bridge host : {esc(identity['cache_population_timing'])}.",
+        "- Une clé/credential TMDB fournie par l'utilisateur n'est **jamais** une précondition de compatibilité NiakVIO.",
+        "- Un secret TMDB ne doit pas être projeté dans le JavaScript provider uniquement pour reconstruire l'identité IMDb.",
+        "- Un client peut fournir une capacité équivalente d'hydratation, mais la disponibilité d'un seul TMDB ID ne permet jamais de conclure que l'identité dual-ID est disponible.",
         "",
         "## Révisions auditées",
         "",
@@ -180,7 +210,8 @@ def render(data: dict) -> str:
         "- **Android et Android TV forcent `Proxy.NO_PROXY`; Desktop ne le force pas.** C'est une différence de transport silencieuse : un provider peut attraper une erreur réseau et retourner `[]` sans exception JavaScript visible.",
         "- **Desktop utilise un bridge `__native_fetch` asynchrone**, alors que Mobile et TV appellent leur pont natif de manière bloquante derrière l'API JavaScript `fetch`.",
         "- **iOS utilise Ktor/Darwin**, contrairement à l'OkHttp d'Android, Desktop et TV. Les comportements réseau propres à la plateforme doivent donc rester audités séparément.",
-        "- **TV injecte `TMDB_API_KEY` dans le runtime plugin; Mobile/Desktop ne l'exposent pas comme global runtime.** Un provider portable ne doit pas dépendre de ce global sans fallback.",
+        "- **TV injecte `TMDB_API_KEY` dans le runtime plugin; Mobile/Desktop ne l'exposent pas comme global runtime.** TV dispose donc actuellement d'une capacité équivalente d'hydratation TMDB→metadata/external_ids→IMDb ; Mobile/Desktop ont un gap host-side documenté. Les providers partagés ne doivent toutefois jamais dépendre de `TMDB_API_KEY`.",
+        "- **Le cache `__nuvioTmdbMetadataCacheV1` est initialisé par Core pendant l'évaluation du bundle et `__nuvioMediaContext` est réécrit pendant la résolution.** Un bridge host dual-ID doit donc alimenter le contrat canonique après l'initialisation Core et avant `getStreams`, sinon son identité peut être écrasée avant le provider.",
         "- **Les six clients conservent désormais les sous-titres retournés par le provider.** TV a ajouté `LocalScraperResult.subtitles` depuis l'audit précédent.",
         "- **Mobile/Desktop ne conservent pas `description` depuis le JSON provider** : leur `StreamItem.description` est reconstruit depuis `quality + size + language`. TV projette également `Stream.description` depuis `LocalScraperResult.size`. NiakVIO utilise donc `size` comme tunnel de description technique complète.",
         "- **Mobile/Desktop privilégient `name` à `title` pour le label plugin.** NiakVIO doit donc écrire `Provider - Qualité` dans les deux champs ; TV conserve les deux et évite de dupliquer la qualité lorsqu'elle est déjà présente.",

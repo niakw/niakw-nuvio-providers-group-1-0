@@ -32,8 +32,6 @@ for provider_id, row in rows.items():
     assert emoji, provider_id
     assert emoji != "🔤", f"generic alphabet fallback is forbidden: {provider_id}"
 
-# Providers for which no stronger semantic symbol was selected use their own
-# first initial as a regional-indicator emoji rather than a generic ABC marker.
 for provider_id, expected in {
     "animepahe": "🇦",
     "yflix": "🇾",
@@ -47,9 +45,6 @@ assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
-# Emoji selection is a one-shot committed migration. Discovery may see a
-# provider before the registry is refreshed, but Core must not synthesize
-# recurring branding for it.
 assert module._load_provider("future-provider-never-seen-before") is None
 future_source = 'globalThis.getStreams=async function(){return [{url:"https://example.com/future.m3u8",name:"future"}]};\n'
 assert module.apply(
@@ -57,17 +52,29 @@ assert module.apply(
     context={"provider_id": "future-provider-never-seen-before"},
 ) == future_source
 
-source = 'globalThis.getStreams=async function(){return [{url:"https://example.com/video.m3u8",name:"old",title:"Peachify - 1080p",quality:"1080p"}]};\n'
+# V8 lossless visible-label contract: STREAM_FACTS already preserved the
+# provider/player-owned values before presentation. Branding must expose the
+# richest source label again while keeping the established ` - quality` suffix.
+source = (
+    'globalThis.getStreams=async function(){return [{'
+    'url:"https://example.com/video.m3u8",'
+    'name:"Peachify - 1080p",title:"Peachify - 1080p",quality:"1080p",'
+    'sourceName:"StreamWish",'
+    'sourceTitle:"StreamWish Server 2 VFF WEB-DL HEVC"'
+    '}]};\n'
+)
 output = module.apply(source, context={"provider_id": "peachify"})
 assert "NUVIO_GLOBAL_PROVIDER_BRANDING_V1" in output
+assert "post-presentation-lossless-source-label-v8" in output
 assert "🍑" in output and "Peachify" in output
 assert module.apply(output, context={"provider_id": "peachify"}) == output
+expected = "🍑 Peachify • StreamWish Server 2 VFF WEB-DL HEVC - 1080p"
 
 with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as handle:
     handle.write(output)
     handle.write(
         '\nPromise.resolve(globalThis.getStreams()).then(function(rows){'
-        'if(!Array.isArray(rows)||rows.length!==1||rows[0].name!=="🍑 Peachify - 1080p"||rows[0].title!=="🍑 Peachify - 1080p")'
+        'if(!Array.isArray(rows)||rows.length!==1||rows[0].name!==' + json.dumps(expected) + '||rows[0].title!==' + json.dumps(expected) + ')'
         '{console.error(JSON.stringify(rows));process.exit(2)}'
         'console.log(rows[0].name)'
         '}).catch(function(error){console.error(error);process.exit(3)});\n'
@@ -83,8 +90,11 @@ try:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "🍑 Peachify - 1080p" in result.stdout
+    assert expected in result.stdout
 finally:
     artifact.unlink(missing_ok=True)
 
-print(f"provider branding V6 contract passed: providers={len(rows)} client_visible_name_title_quality=1")
+print(
+    f"provider branding V8 contract passed: providers={len(rows)} "
+    "client_visible_name_title_quality=1 source_player_metadata_visible=1"
+)

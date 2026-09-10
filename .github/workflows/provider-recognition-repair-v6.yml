@@ -22,6 +22,7 @@ on:
   push:
     branches:
       - workbench/route-recognition-v6
+      - workbench/systemic-recovery-20260909
       - main
     paths:
       - '.github/triggers/provider-recognition-repair-v6.json'
@@ -71,8 +72,11 @@ jobs:
             scripts/audit_provider_repair_yield_v6.py \
             scripts/audit_provider_quick_yield_targeted.py \
             scripts/compare_quick_yield_preservation.py \
-            scripts/upgrade_provider_worker_route_proof_v1.py
+            scripts/upgrade_provider_worker_route_proof_v1.py \
+            scripts/build_provider_history_matrix_v3.py \
+            scripts/check_provider_non_regression_v1.py
           python tests/provider_repair_pipeline_v6_contract_test.py
+          python tests/provider_non_regression_contract_test.py
 
       - name: Run canonical recognition and correction only for unresolved providers
         shell: bash
@@ -109,6 +113,17 @@ jobs:
           printf 'CANONICAL_REPAIR_ARGS %q ' "${args[@]}"; echo
           "${args[@]}"
 
+      - name: Enforce four-version floor on repair candidate
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode != 'learn') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          python scripts/build_provider_history_matrix_v3.py
+          python scripts/check_provider_non_regression_v1.py
+          test -s provider-v3-quick-yield.json
+          python scripts/check_provider_non_regression_v1.py --candidate-gate --all --base-ref HEAD
+
       - name: Verify known-green providers were not network re-probed
         if: always()
         shell: bash
@@ -139,6 +154,10 @@ jobs:
             automation/provider-repair-portfolio-retry.json
             automation/provider-repair-portfolio-losses.json
             automation/provider-v3-static-knowledge.json
+            automation/provider-history-matrix.json
+            automation/provider-non-regression-gate.json
+            automation/PROVIDER-HISTORY-MATRIX.md
+            provider-v3-quick-yield.json
             provider-overrides.json
             PROVENANCE.json
             provider-bases/

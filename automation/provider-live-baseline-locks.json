@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "catalogueProviderCount": 96,
+  "baselineManifestVersion": "5.21.37",
+  "baselineCommit": "5824f9f1a95b8e82ed1c1f7cbb2d2dfaad56201f",
+  "policy": "A live-positive published lane is immutable on its exact bundle bytes until a replacement wins a same-context live A/B non-regression proof. Partial green providers remain repair-eligible on unprotected lanes.",
+  "providers": {
+    "anime-sama": {
+      "bundle": "providers/anime-sama--nuvio--cc39ec45b53a4276.js",
+      "protectedLanes": ["anime"],
+      "completeProvider": false,
+      "evidence": [
+        {"kind": "field", "environment": "TV published manifest", "fixture": "The Unwanted Undead Adventurer", "date": "2026-09-09"},
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "anime", "status": "playable_verified"}
+      ]
+    },
+    "castle": {
+      "bundle": "providers/castle--nuvio--5f92106210cec916.js",
+      "protectedLanes": ["movie", "tv"],
+      "completeProvider": true,
+      "evidence": [
+        {"kind": "field", "environment": "TV published manifest", "fixture": "Interstellar", "date": "2026-09-09"},
+        {"kind": "field", "environment": "TV published manifest", "fixture": "House of the Dragon S1E1", "date": "2026-09-09"}
+      ]
+    },
+    "desiflix": {
+      "bundle": "providers/desiflix--nuvio--3d1ab0c96779aca6.js",
+      "protectedLanes": ["tv"],
+      "completeProvider": false,
+      "evidence": [
+        {"kind": "field", "environment": "TV published manifest", "fixture": "House of the Dragon S1E1", "date": "2026-09-09"},
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "tv", "status": "playable_verified"}
+      ]
+    },
+    "hindmoviez": {
+      "bundle": "providers/hindmoviez--nuvio--8d560a8ccf037a6b.js",
+      "protectedLanes": ["movie"],
+      "completeProvider": false,
+      "evidence": [
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "movie", "status": "playable_verified"}
+      ]
+    },
+    "persianstremio": {
+      "bundle": "providers/persianstremio--nuvio--0d5ef668a8d05840.js",
+      "protectedLanes": ["movie", "tv"],
+      "completeProvider": true,
+      "evidence": [
+        {"kind": "field", "environment": "TV published manifest", "fixture": "Interstellar", "date": "2026-09-09"},
+        {"kind": "field", "environment": "TV published manifest", "fixture": "House of the Dragon S1E1", "date": "2026-09-09"},
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "movie", "status": "playable_verified"},
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "tv", "status": "playable_verified"}
+      ]
+    },
+    "streamzo": {
+      "bundle": "providers/streamzo--nuvio--abf2ec75cf133cda.js",
+      "protectedLanes": ["movie"],
+      "completeProvider": false,
+      "evidence": [
+        {"kind": "field", "environment": "TV published manifest", "fixture": "Interstellar", "date": "2026-09-09"},
+        {"kind": "published-current-bytes", "runId": "34325624325", "lane": "movie", "status": "playable_verified"}
+      ]
+    }
+  }
+}

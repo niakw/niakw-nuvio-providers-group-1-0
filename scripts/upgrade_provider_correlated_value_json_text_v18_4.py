@@ -145,6 +145,10 @@ def validate(text: str | None = None) -> None:
         raise AssertionError(f"V18.4 marker count={value.count(MARKER)}")
     if value.count(TRACE_MARKER) != 1:
         raise AssertionError(f"V18.4 trace marker count={value.count(TRACE_MARKER)}")
+
+    # Invariants owned by V18.4 itself and still required after later V20.x
+    # response-value migrations. Later owners may replace local variable names,
+    # id/slug representation and replay depth, but not this bounded trace API.
     for needle in (
         "function _spv184Trace(stage, mediaType, providerId, stepIndex, route)",
         "globalThis.__nuvioProviderValueTraceV18",
@@ -155,11 +159,6 @@ def validate(text: str | None = None) -> None:
         '"plan_selected"',
         "const rawSearchValue = _text(searchPayload.value).trim();",
         "rawSearchValue.length <= 4 * 1024 * 1024",
-        "_spv18ProviderIdFromJson(JSON.parse(rawSearchValue), meta)",
-        "if (!providerId) providerId = _spv18ProviderIdFromHtml(rawSearchValue, meta);",
-        "providerId = _spv18ProviderIdFromJson(searchPayload.value, meta);",
-        'providerId ? "identity_hit" : "identity_miss"',
-        "const valueSteps = (plan.steps || []).slice(0, 4);",
         '"step_shape_rejected"',
         '"step_url_empty"',
         '"step_fetch"',
@@ -167,9 +166,60 @@ def validate(text: str | None = None) -> None:
     ):
         if needle not in value:
             raise AssertionError(f"V18.4 missing {needle}")
-    trace_window = value.split("/* NIAKVIO_PROVIDER_VALUE_TRACE_V18_4 */", 1)[1].split(
-        "async function _resolveSearchRequestPlan", 1
-    )[0].lower()
+
+    legacy_identity_bridge = all(needle in value for needle in (
+        "_spv18ProviderIdFromJson(JSON.parse(rawSearchValue), meta)",
+        "if (!providerId) providerId = _spv18ProviderIdFromHtml(rawSearchValue, meta);",
+        "providerId = _spv18ProviderIdFromJson(searchPayload.value, meta);",
+    ))
+    response_value_bridge = all(needle in value for needle in (
+        "_spv20ProviderValuesFromJson(JSON.parse(rawSearchValue), meta)",
+        "providerValues = _spv20ProviderValuesFromHtml(rawSearchValue, meta);",
+        "providerValues = _spv20ProviderValuesFromJson(searchPayload.value, meta);",
+    ))
+    strict_v205_bridge = all(needle in value for needle in (
+        "NIAKVIO_PROVIDER_RESPONSE_VALUE_DEPENDENCY_V20_5",
+        "providerValues = _spv205StrictProviderValues(",
+        "const providerTraceId = providerValues.id || providerValues.slug || \"\";",
+    ))
+    if not legacy_identity_bridge and not response_value_bridge and not strict_v205_bridge:
+        raise AssertionError(
+            "V18.4 JSON-text identity bridge missing legacy V18.4 or current V20.x owner"
+        )
+
+    legacy_trace = (
+        '_spv184Trace(providerId ? "identity_hit" : "identity_miss", '
+        'mediaType, providerId, -1, searchRoute);'
+    )
+    dependency_trace = (
+        '_spv184Trace(providerTraceId ? "identity_hit" : "identity_miss", '
+        'mediaType, providerTraceId, -1, searchRoute);'
+    )
+    if legacy_trace not in value and dependency_trace not in value:
+        raise AssertionError(
+            "V18.4 identity trace missing legacy providerId or V20.5 providerTraceId owner"
+        )
+
+    legacy_depth = "const valueSteps = (plan.steps || []).slice(0, 4);"
+    current_depth = "const valueSteps = (plan.steps || []).slice(0, 8);"
+    if legacy_depth not in value and current_depth not in value:
+        raise AssertionError(
+            "V18.4 provider-value depth missing legacy 4 or current V20.5 depth 8"
+        )
+
+    # Security check must inspect the V18.4 trace helper itself, not every helper
+    # later migrations inserted before another resolver. V20.5 legitimately
+    # contains words such as `authorization` in its *rejection* filters; that is
+    # not trace output. Keep the forbidden-field policy unchanged and narrow only
+    # the ownership window.
+    trace_start = value.index("/* NIAKVIO_PROVIDER_VALUE_TRACE_V18_4 */")
+    trace_function = value.index("function _spv184Trace(", trace_start)
+    trace_end = value.find("\n}\n", trace_function)
+    if trace_end < 0:
+        raise AssertionError("V18.4 trace helper end missing")
+    trace_window = value[trace_start : trace_end + 3].lower()
+    if "globalthis.__nuvioprovidervaluetracev18" not in trace_window:
+        raise AssertionError("V18.4 trace helper does not own the bounded trace object")
     for forbidden in ("authorization", "cookie", "set-cookie", "requestheaders", "responsebody"):
         if forbidden in trace_window:
             raise AssertionError(f"V18.4 trace leaks forbidden field {forbidden}")

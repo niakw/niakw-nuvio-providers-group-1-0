@@ -1,0 +1,168 @@
+name: Provider Non-Regression Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'manifest.json'
+      - 'providers/**'
+      - 'provider-overrides.json'
+      - 'provider_catalog.json'
+      - 'provider-hubs.json'
+      - 'provider-type-policy.json'
+      - 'provider-v3-quick-yield.json'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'automation/provider-v3-architecture.json'
+      - 'automation/provider-history-evidence-v1.json'
+      - '.github/workflows/**'
+  push:
+    branches:
+      - workbench/systemic-recovery-20260909
+    paths:
+      - 'manifest.json'
+      - 'providers/**'
+      - 'provider-overrides.json'
+      - 'provider_catalog.json'
+      - 'provider-hubs.json'
+      - 'provider-type-policy.json'
+      - 'provider-v3-quick-yield.json'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'automation/provider-v3-architecture.json'
+      - 'automation/provider-history-evidence-v1.json'
+      - '.github/workflows/provider-history-matrix.yml'
+      - '.github/workflows/provider-non-regression.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-non-regression-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  four-version-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+      NIAKVIO_QUICK_YIELD_WORKERS: '16'
+      NIAKVIO_QUICK_YIELD_TIMEOUT: '45'
+    steps:
+      - name: Checkout exact validation ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install locked provider dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Static anti-regression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/workflow_security_policy_test.py
+          python tests/provider_non_regression_contract_test.py
+          python tests/provider_v3_workflow_ownership_test.py
+          python tests/provider_521_capability_regression_test.py
+          python tests/global_media_type_pre_network_gate_test.py
+          python tests/global_media_type_resolution_test.py
+          python tests/episodic_year_identity_regression_test.py
+          python tests/global_playback_integrity_policy_test.py
+
+      - name: Build exact four-version ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          python -m py_compile scripts/build_provider_history_matrix.py scripts/build_provider_history_matrix_v2.py scripts/build_provider_history_matrix_v3.py scripts/check_provider_non_regression_v1.py
+          python scripts/build_provider_history_matrix_v3.py
+          python scripts/check_provider_non_regression_v1.py
+
+      - name: Run real 96-provider candidate census
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TMDB_API_KEY:-}${TMDB_ACCESS_TOKEN:-}" || {
+            echo 'TMDB credential required for provider non-regression census' >&2
+            exit 1
+          }
+          python scripts/audit_provider_quick_yield.py | tee provider-v3-quick-yield.log
+
+      - name: Select rolling accepted baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF='${{ github.event.pull_request.base.sha }}'
+          else
+            BASE_REF="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$BASE_REF^{commit}"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "PROVIDER_NON_REGRESSION_BASE ref=$BASE_REF"
+
+      - name: Enforce rolling non-regression floor
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_REF='${{ steps.baseline.outputs.base_ref }}'
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/workbench/systemic-recovery-20260909" ]; then
+            python scripts/check_provider_non_regression_v1.py --candidate-gate --all --base-ref "$BASE_REF"
+          else
+            python scripts/check_provider_non_regression_v1.py --candidate-gate --base-ref "$BASE_REF"
+          fi
+
+      - name: Publish gate summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -s provider-v3-quick-yield.log ]; then
+            grep '^FIELD_PROVIDER_QUICK_YIELD' provider-v3-quick-yield.log >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          if [ -s automation/provider-non-regression-gate.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p=Path('automation/provider-non-regression-gate.json')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          print('### Provider non-regression gate')
+          print(f"- mode: `{data.get('mode')}`")
+          print(f"- passed: **{data.get('passed')}**")
+          print(f"- scope: **{data.get('scopeProviderCount', data.get('providerCount', 0))}** providers")
+          print(f"- failures: **{data.get('failureCount', 0)}**")
+          failed=[x.get('provider') for x in data.get('failures', []) if isinstance(x, dict)]
+          if failed:
+              print('- failed providers: ' + ', '.join(f'`{x}`' for x in failed))
+          PY
+          fi
+
+      - name: Upload four-version proof evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: provider-non-regression-${{ github.run_id }}
+          path: |
+            provider-v3-quick-yield.json
+            provider-v3-quick-yield.log
+            automation/provider-history-matrix.json
+            automation/provider-non-regression-gate.json
+            automation/PROVIDER-HISTORY-MATRIX.md
+          retention-days: 21
+          if-no-files-found: warn

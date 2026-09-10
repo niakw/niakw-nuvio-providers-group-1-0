@@ -71,7 +71,6 @@ rows = [
             "body": {"do": "search", "subaction": "search", "story": "{query}"},
         },
     ),
-    # Positive TV evidence is intentionally not representable as episodeRoute.
     record(origin=base, route="/index.php?newsid={id}", role="detail", media="tv", index=2, last=4),
 ]
 recipe = recovery.build_simple_api_recipe(rows)
@@ -81,8 +80,8 @@ assert recipe.get("allowGenericFallback") is True, recipe
 assert "tv" in (recipe.get("partialCoverageFallback") or []), recipe
 
 
-# Proof-owned search authority must use live provider origins, exclude metadata
-# helpers, and honor already-promoted runtime domain replacements.
+# Proof-owned search authority uses live provider origins and only an explicitly
+# promoted runtime replacement may rewrite that origin.
 proof_rows = [
     record(
         origin="https://new5.movies4u.clinic",
@@ -110,18 +109,25 @@ rewritten = recovery._positive_proof_search_bases(
 )
 assert rewritten == ["https://fs23.lol"], rewritten
 
+historical_only = recovery._positive_proof_search_bases(
+    [record(origin="https://hindmovie.icu", route="/?s={query}", role="search", media="movie", index=0, last=2)],
+    {"domain_substitutions": {"hindmovie.icu": "hindmovie.fit"}},
+)
+assert historical_only == ["https://hindmovie.icu"], historical_only
 
-# Explicit runtime replacements are executable DATA and are merged with existing
-# domain substitutions; historical generic replacement maps are deliberately not.
+
+# Only explicit runtime replacements are executable DATA. Historical generic
+# substitutions/replacements remain candidate knowledge and cannot redirect a
+# current official/live provider endpoint.
 substitutions = materializer._runtime_domain_substitutions({
-    "domain_substitutions": {"old.example": "current.example"},
+    "domain_substitutions": {"hindmovie.icu": "hindmovie.fit"},
     "runtime_domain_replacements": {
         "https://french-stream.one": "https://fs23.lol",
         "new2.movies4u.tube": "new5.movies4u.clinic",
     },
     "replacements": {"candidate-only.example": "must-not-promote.example"},
 })
-assert substitutions["old.example"] == "current.example", substitutions
+assert "hindmovie.icu" not in substitutions, substitutions
 assert substitutions["french-stream.one"] == "fs23.lol", substitutions
 assert substitutions["new2.movies4u.tube"] == "new5.movies4u.clinic", substitutions
 assert "candidate-only.example" not in substitutions, substitutions

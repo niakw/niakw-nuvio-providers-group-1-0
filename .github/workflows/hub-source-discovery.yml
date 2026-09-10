@@ -1,0 +1,127 @@
+name: LAB - Hub Source Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_providers:
+        description: Maximum missing-hub providers to scan (0 = all)
+        required: false
+        default: '0'
+        type: string
+  push:
+    branches: [workbench/systemic-recovery-20260909]
+    paths:
+      - '.github/workflows/hub-source-discovery.yml'
+      - 'scripts/discover_provider_hub_sources.py'
+      - 'tests/provider_hub_source_discovery_guard_test.py'
+  schedule:
+    - cron: '41 4 * * 2,5'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: niakvio-hub-source-discovery-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || 'main' }}
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Enforce immutable-existing-hub guard
+        run: |
+          python -m py_compile scripts/discover_provider_hub_sources.py
+          python tests/provider_hub_source_discovery_guard_test.py
+
+      - name: Discover missing authoritative hub sources
+        env:
+          MAX_PROVIDERS: ${{ github.event.inputs.max_providers || '0' }}
+        run: |
+          set -euo pipefail
+          mkdir -p health-output
+          cp provider-hubs.json "$RUNNER_TEMP/provider-hubs.before.json"
+          python scripts/discover_provider_hub_sources.py \
+            --apply \
+            --max-providers "$MAX_PROVIDERS" \
+            --workers 8 \
+            --timeout 7 \
+            --output health-output/provider-hub-source-discovery.json
+
+          # Absolute safety invariant: an existing authoritative hub/source may
+          # never be changed or removed by this job. Only previously empty rows
+          # may gain a hub/address source.
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          before=json.loads(Path(os.environ['RUNNER_TEMP']).joinpath('provider-hubs.before.json').read_text())
+          after=json.loads(Path('provider-hubs.json').read_text())
+          protected={'hub','telegram_public','redirect'}
+          def authority(row):
+              hub=row.get('hub') if isinstance(row,dict) else None
+              sources=[] if not isinstance(row,dict) else row.get('sources') or []
+              auth=[(str(s.get('type') or ''),str(s.get('url') or '')) for s in sources if isinstance(s,dict) and str(s.get('type') or '').lower() in protected and s.get('url')]
+              return hub,auth
+          bp=before.get('providers') or {}; ap=after.get('providers') or {}
+          for pid,brow in bp.items():
+              bh,ba=authority(brow)
+              if bh or ba:
+                  assert pid in ap, f'protected provider removed: {pid}'
+                  ah,aa=authority(ap[pid])
+                  assert bh==ah, f'existing hub changed: {pid}: {bh!r} -> {ah!r}'
+                  assert ba==aa, f'existing authoritative sources changed: {pid}'
+          print('immutable existing hub invariant: ok')
+          PY
+
+      - name: Validate registry
+        run: |
+          python tests/provider_hub_registry_test.py
+          git diff --exit-code -- provider-overrides.json provider-domain-history.json manifest.json
+
+      - name: Propose confirmed additions as pull request
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add provider-hubs.json
+          if git diff --cached --quiet; then
+            echo 'No confirmed missing hub source discovered.'
+            exit 0
+          fi
+
+          BRANCH='automation/hub-source-discovery'
+          git switch -C "$BRANCH"
+          git commit -m 'chore(hubs): add confirmed missing address sources'
+          git push --force-with-lease origin "$BRANCH"
+
+          EXISTING="$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')"
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title 'chore(hubs): confirmed missing address sources' \
+              --body $'Automated fill-only hub discovery.\n\nSafety: existing hub/Telegram/redirect sources are immutable; only providers with no authoritative source are eligible. A new source requires structural address-source evidence and at least two independent search confirmations in the same run. No Provider JS, manifests, current domains or provider-overrides are changed by this job.'
+          else
+            gh pr comment "$EXISTING" --body 'Hub discovery reran and refreshed the confirmed fill-only additions on this PR branch.'
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: hub-source-discovery-${{ github.run_id }}
+          path: health-output/provider-hub-source-discovery.json
+          retention-days: 14
+          if-no-files-found: warn

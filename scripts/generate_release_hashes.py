@@ -82,6 +82,7 @@ CORE_FILES = [
     "scripts/verify_provider_v3_reverse_rebuild.py",
     "scripts/provider_patches/stream_output_sanitizer_v5.py",
     "scripts/provider_patches/stream_output_sanitizer_v6.py",
+    "scripts/provider_patches/stream_output_sanitizer_v7.py",
     "scripts/provider_patches/global_media_enrichment_v1.py",
     "scripts/provider_patches/global_media_type_resolution_v1.py",
     "scripts/provider_patches/runtime_capability_media_safety_v4.py",

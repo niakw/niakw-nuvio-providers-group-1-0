@@ -14,8 +14,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/anime-sama--nuvio--cc39ec45b53a4276.js",
-      "enabled": true,
+      "filename": "../providers/anime-sama-a873dd67bebd5be8.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/anime-sama.webp",
       "contentLanguage": [
         "fr"
@@ -43,8 +43,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/purstream--nuvio--4f14d92ed5acea15.js",
-      "enabled": true,
+      "filename": "../providers/purstream-b80f30945b337719.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -72,8 +72,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/flemmix--nuvio--6876e66b0fdbe558.js",
-      "enabled": true,
+      "filename": "../providers/flemmix-dc1988503140fafc.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/flemmix.webp",
       "contentLanguage": [
         "fr"
@@ -108,8 +108,8 @@
       ],
       "formats": [],
       "hasSettings": false,
-      "filename": "../providers/kehflix--nuvio--c589545b2579199a.js",
-      "enabled": true,
+      "filename": "../providers/kehflix-2452c9e13894a08a.js",
+      "enabled": false,
       "disabledPlatforms": [],
       "canonicalSupportedTypes": [
         "movie",
@@ -129,8 +129,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/animesama-co--nuvio--cd39debc681f668b.js",
-      "enabled": true,
+      "filename": "../providers/animesama-co-5cd15c0a881eea81.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/animesama-co.webp",
       "contentLanguage": [
         "fr"
@@ -159,8 +159,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/animesultra--nuvio--93c0f4ce5a5aa144.js",
-      "enabled": true,
+      "filename": "../providers/animesultra-d7f5cdf7d564b0e5.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/animesultra.webp",
       "contentLanguage": [
         "fr"
@@ -189,8 +189,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/animevostfr--nuvio--17dfb377afd7e4ca.js",
-      "enabled": true,
+      "filename": "../providers/animevostfr-b94ab325539e3ae5.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/animevostfr.webp",
       "contentLanguage": [
         "fr"
@@ -219,8 +219,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/animoflix--nuvio--3ed7eca92f869393.js",
-      "enabled": true,
+      "filename": "../providers/animoflix-9202381102c3cf42.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/animoflix.webp",
       "contentLanguage": [
         "fr"
@@ -249,8 +249,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/coflix--nuvio--578d4c0823c4cdad.js",
-      "enabled": true,
+      "filename": "../providers/coflix-ae1248db7109c8ab.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/coflix.webp",
       "contentLanguage": [
         "fr"
@@ -279,8 +279,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/dulourd--nuvio--4c183bfa113a3e2f.js",
-      "enabled": true,
+      "filename": "../providers/dulourd-e8b72c0f760e3198.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/dulourd.webp",
       "contentLanguage": [
         "fr"
@@ -309,8 +309,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/french-manga--nuvio--a09a3974a793b1d7.js",
-      "enabled": true,
+      "filename": "../providers/french-manga-e4e58cb9335d764d.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/french-manga.webp",
       "contentLanguage": [
         "fr"
@@ -339,7 +339,7 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/movix--nuvio--41fa200531e30ef0.js",
+      "filename": "../providers/movix-234afe4d6465d7ef.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/movix.webp",
       "contentLanguage": [
@@ -371,8 +371,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/mugiwarastream--nuvio--80b578234a536bb8.js",
-      "enabled": true,
+      "filename": "../providers/mugiwarastream-9e99fe9e36d1f741.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/mugiwarastream.webp",
       "contentLanguage": [
         "fr"
@@ -402,8 +402,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/nakios--nuvio--1ce8edd473a95cae.js",
-      "enabled": true,
+      "filename": "../providers/nakios-01db709aaba737ef.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/nakios.webp",
       "contentLanguage": [
         "fr",
@@ -432,8 +432,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/neko-sama--nuvio--92f110ee81c16a21.js",
-      "enabled": true,
+      "filename": "../providers/neko-sama-e5ecd52a10150dfc.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/neko-sama.webp",
       "contentLanguage": [
         "fr"
@@ -446,8 +446,7 @@
       "disabledPlatforms": [],
       "supportsExternalPlayer": false,
       "canonicalSupportedTypes": [
-        "anime",
-        "tv"
+        "anime"
       ]
     },
     {
@@ -462,8 +461,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/papadustream--nuvio--e8efa50a9456a32d.js",
-      "enabled": true,
+      "filename": "../providers/papadustream-e0c1e2e71e2dd6a4.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/papadustream.webp",
       "contentLanguage": [
         "fr",
@@ -493,8 +492,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/sekai--nuvio--15a299a0c8ac88c5.js",
-      "enabled": true,
+      "filename": "../providers/sekai-9d0e4942b0644bf7.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/sekai.webp",
       "contentLanguage": [
         "fr"
@@ -523,8 +522,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/streamzo--nuvio--abf2ec75cf133cda.js",
-      "enabled": true,
+      "filename": "../providers/streamzo-1162c6e774844f89.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/streamzo.webp",
       "contentLanguage": [
         "fr"
@@ -553,8 +552,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/toflix--nuvio--4967b63161d8f50d.js",
-      "enabled": true,
+      "filename": "../providers/toflix-c04e393150b717ca.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -584,8 +583,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/voiranime--nuvio--166cc9ba60e3476b.js",
-      "enabled": true,
+      "filename": "../providers/voiranime-221575bab038915d.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/voiranime.webp",
       "contentLanguage": [
         "fr"
@@ -615,8 +614,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/voiranime-homes--nuvio--326f9c674e179c05.js",
-      "enabled": true,
+      "filename": "../providers/voiranime-homes-d1e20cf51d7c4c25.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/voiranime-homes.webp",
       "contentLanguage": [
         "fr"
@@ -645,8 +644,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/voiranime-rip--nuvio--3dc410946a80f51f.js",
-      "enabled": true,
+      "filename": "../providers/voiranime-rip-6651e32c21e5602e.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/voiranime-rip.webp",
       "contentLanguage": [
         "fr"
@@ -675,8 +674,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vostfree--nuvio--5487da1136e85ef3.js",
-      "enabled": true,
+      "filename": "../providers/vostfree-d03a5f7cf7d7793f.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/vostfree.webp",
       "contentLanguage": [
         "fr"
@@ -704,8 +703,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/wookafr--nuvio--dd401fa1279f885f.js",
-      "enabled": true,
+      "filename": "../providers/wookafr-89efec587201aa04.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/wookafr.webp",
       "contentLanguage": [
         "fr"
@@ -734,7 +733,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/anime-ultime--nuvio--2f7ad09c6876f9cf.js",
+      "filename": "../providers/anime-ultime-c32e027b79792dd1.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/anime-ultime.webp",
       "contentLanguage": [
@@ -763,7 +762,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/animevost-fr--nuvio--899fb9d02ee7f085.js",
+      "filename": "../providers/animevost-fr-828216542c22cdc6.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/animevost-fr.webp",
       "contentLanguage": [
@@ -777,8 +776,7 @@
       "disabledPlatforms": [],
       "supportsExternalPlayer": false,
       "canonicalSupportedTypes": [
-        "anime",
-        "tv"
+        "anime"
       ]
     },
     {
@@ -793,7 +791,7 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/frenchstream--nuvio--0d8db90c6e4a3670.js",
+      "filename": "../providers/frenchstream-2a9ea5a6bed13200.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/frenchstream.webp",
       "contentLanguage": [
@@ -824,7 +822,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/fullanime--nuvio--d9fd503f6e54d254.js",
+      "filename": "../providers/fullanime-8b80efbafc3161e9.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/fullanime.webp",
       "contentLanguage": [
@@ -838,8 +836,7 @@
       "disabledPlatforms": [],
       "supportsExternalPlayer": false,
       "canonicalSupportedTypes": [
-        "anime",
-        "tv"
+        "anime"
       ]
     },
     {
@@ -853,7 +850,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/waveanime--nuvio--5a121447a33d551e.js",
+      "filename": "../providers/waveanime-21fae2fcc8b87b61.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/waveanime.webp",
       "contentLanguage": [
@@ -866,8 +863,7 @@
       "disabledPlatforms": [],
       "supportsExternalPlayer": false,
       "canonicalSupportedTypes": [
-        "anime",
-        "tv"
+        "anime"
       ]
     }
   ]

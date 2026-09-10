@@ -16,7 +16,6 @@ DEFAULT_ENDPOINTS=[
  {"label":"Krypton","path":"ym/sources-with-title"},
  {"label":"Carbon","path":"mb-flix/sources-with-title"},
  {"label":"Aluminium","path":"lamovie/sources-with-title"},
- {"label":"Nitrogen","path":"m4uhd/sources-with-title"},
  {"label":"Neon","path":"superflix/sources-with-title"},
  {"label":"Helium","path":"1movies/sources-with-title"},
 ]

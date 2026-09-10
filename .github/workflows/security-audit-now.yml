@@ -102,14 +102,14 @@ jobs:
           test '${{ steps.npm_audit.outcome }}' = success
           test '${{ steps.security_gates.outcome }}' = success
 
-  codeql:
+  codeql-core:
     name: CodeQL · ${{ matrix.language }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, javascript-typescript, python]
+        language: [actions, python]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -125,3 +125,55 @@ jobs:
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
         with:
           category: "/language:${{ matrix.language }}/one-shot"
+
+  codeql-javascript:
+    # Same complete JS/TS coverage as SEC - CodeQL, split into bounded databases
+    # so generated provider trees cannot stall one monolithic TRAP import.
+    name: CodeQL · javascript-typescript · ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: source
+            config: |
+              paths-ignore:
+                - providers/**
+                - provider-bases/**
+          - shard: providers
+            config: |
+              paths:
+                - providers/**
+          - shard: provider-bases
+            config: |
+              paths:
+                - provider-bases/**
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL shard
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+          config: ${{ matrix.config }}
+      - name: Analyze
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
+        with:
+          category: "/language:javascript-typescript/one-shot/shard:${{ matrix.shard }}"
+
+  codeql-javascript-result:
+    name: CodeQL · javascript-typescript
+    if: always()
+    needs: codeql-javascript
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce all JavaScript/TypeScript shards
+        env:
+          SHARD_RESULT: ${{ needs.codeql-javascript.result }}
+        run: test "$SHARD_RESULT" = "success"

@@ -3,11 +3,15 @@ name: Provider History Matrix
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - workbench/systemic-recovery-20260909
     paths:
       - '.github/workflows/provider-history-matrix.yml'
       - 'scripts/build_provider_history_matrix.py'
       - 'scripts/build_provider_history_matrix_v2.py'
+      - 'scripts/build_provider_history_matrix_v3.py'
+      - 'scripts/check_provider_non_regression_v1.py'
       - 'automation/provider-history-evidence-v1.json'
       - 'automation/provider-repair-learn-handoff-v1.json'
       - 'provider-v3-quick-yield.json'
@@ -32,13 +36,15 @@ jobs:
           python-version: '3.12'
       - name: Security policy preflight
         run: python tests/workflow_security_policy_test.py
-      - name: Build historical provider matrix
+      - name: Build authoritative four-version provider matrix
         run: |
           git fetch --force --tags origin
-          python -m py_compile scripts/build_provider_history_matrix.py scripts/build_provider_history_matrix_v2.py
-          python scripts/build_provider_history_matrix_v2.py
-          git diff --check -- automation/PROVIDER-HISTORY-MATRIX.md automation/provider-history-matrix.json
-      - name: Persist generated matrix only
+          python -m py_compile scripts/build_provider_history_matrix.py scripts/build_provider_history_matrix_v2.py scripts/build_provider_history_matrix_v3.py scripts/check_provider_non_regression_v1.py
+          python scripts/build_provider_history_matrix_v3.py
+          python scripts/check_provider_non_regression_v1.py
+          git diff --check -- automation/PROVIDER-HISTORY-MATRIX.md automation/provider-history-matrix.json automation/provider-non-regression-gate.json
+      - name: Persist generated matrix only on main
+        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -47,5 +53,5 @@ jobs:
             echo 'PROVIDER_HISTORY_MATRIX_PERSIST unchanged=true'
             exit 0
           fi
-          git commit -m 'docs(provider): refresh colored 96-provider historical live matrix'
+          git commit -m 'docs(provider): refresh four-version non-regression matrix'
           git push origin HEAD:main

@@ -2,7 +2,9 @@ name: DOC - Memory Checkpoint
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'workbench/**'
     paths:
       - 'automation/memory-checkpoint-pending-v2.md'
 
@@ -10,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: niakvio-memory-checkpoint
+  group: niakvio-memory-checkpoint-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - name: Append pending checkpoint idempotently
         shell: bash
@@ -57,5 +59,5 @@ jobs:
             exit 0
           fi
           git commit -m 'docs(memory): checkpoint NiakVIO recovery state'
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

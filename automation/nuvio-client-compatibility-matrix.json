@@ -9,21 +9,61 @@
     "client_runtime_equivalence": "Never infer runtime compatibility from a sibling client. Desktop, Mobile and TV must each execute the shared provider/Core bundle in their own official runtime; success on one client is evidence for that client only.",
     "runtime_error_observability": "Official clients may intentionally collapse getStreams JavaScript exceptions into an empty result for application resilience. Native Labs must preserve those exceptions as diagnostic evidence and must not classify the resulting empty application value as a successful runtime execution.",
     "cross_client_divergence": "A single provider/client discrepancy remains Brain evidence. A systematic client-wide empty/runtime-error pattern while an official peer succeeds is a blocking runtime-contract failure.",
-    "client_session_lifecycle_faults": "Cross-work stream loading exhaustion or recovery after restarting the client is client-runtime lifecycle evidence, never provider disablement proof by itself."
+    "client_session_lifecycle_faults": "Cross-work stream loading exhaustion or recovery after restarting the client is client-runtime lifecycle evidence, never provider disablement proof by itself.",
+    "media_identity_contract": "The positional getStreams(tmdbId, mediaType, season, episode) argument is transport, not the full media identity. NiakVIO's canonical IMDb metadata path is __nuvioMediaContext.tmdbMetadata.external_ids.imdb_id and its shared metadata cache is __nuvioTmdbMetadataCacheV1. Equivalent client hydration is allowed, but no end-user TMDB credential may be required and no TMDB secret may be projected into provider JavaScript solely to recover IMDb identity."
   },
   "capability_universe": [
-    "invocation", "media-type", "settings", "dns", "hub", "search", "telegram", "lkg",
-    "headers", "cookies", "redirects", "routes", "parser", "json", "javascript", "identity",
-    "detail", "series", "episode", "anime", "player", "embed", "html", "media", "xhr",
-    "token", "session", "referer", "origin", "ranking", "timing", "timeout", "range", "tls",
-    "decoder", "codec", "playlist", "runtime-version", "contract", "evidence", "duration"
+    "invocation",
+    "media-type",
+    "settings",
+    "dns",
+    "hub",
+    "search",
+    "telegram",
+    "lkg",
+    "headers",
+    "cookies",
+    "redirects",
+    "routes",
+    "parser",
+    "json",
+    "javascript",
+    "identity",
+    "detail",
+    "series",
+    "episode",
+    "anime",
+    "player",
+    "embed",
+    "html",
+    "media",
+    "xhr",
+    "token",
+    "session",
+    "referer",
+    "origin",
+    "ranking",
+    "timing",
+    "timeout",
+    "range",
+    "tls",
+    "decoder",
+    "codec",
+    "playlist",
+    "runtime-version",
+    "contract",
+    "evidence",
+    "duration"
   ],
   "clients": {
     "nuvio-mobile": {
       "family": "mobile-quickjs",
       "repository": "NuvioMedia/NuvioMobile",
       "branch": "cmp-rewrite",
-      "platforms": ["android", "ios"],
+      "platforms": [
+        "android",
+        "ios"
+      ],
       "baseline": {
         "ref": "0d6e30e4566e6f9f2051d5f80a1e3f1e0fcb1f18",
         "version_name": "0.4.5",
@@ -34,7 +74,10 @@
         "version_name": "0.4.14",
         "version_code": 118
       },
-      "supported_version_code": {"min": 109, "max": 118},
+      "supported_version_code": {
+        "min": 109,
+        "max": 118
+      },
       "provider_contract": {
         "runtime": "quickjs-positional-getStreams",
         "request_shape": "getStreams(tmdbId, mediaType, season, episode)",
@@ -55,25 +98,83 @@
         "official_getStreams_error_behavior": "application runtime catches JavaScript getStreams errors and captures []",
         "lab_error_policy": "diagnostic runtime trap preserves swallowed errors before collection/cross-client gates",
         "surface_note": "Mobile and Desktop currently share several runtime bridge subtrees, but their PluginRuntime/JsBindings/network sources are independently versioned and must be diffed separately.",
-        "audited_change": "2026-09-06 re-audit at cmp-rewrite HEAD 68337ffac857: the 20 commits since d4891ffa do not change PluginRuntime, PluginRepository or PluginModels. Positional getStreams, PluginRuntimeResult projection and Android/iOS provider transports remain compatible; player/download/UI changes still require native reader proof on each platform."
+        "audited_change": "2026-09-06 re-audit at cmp-rewrite HEAD 68337ffac857: the 20 commits since d4891ffa do not change PluginRuntime, PluginRepository or PluginModels. Positional getStreams, PluginRuntimeResult projection and Android/iOS provider transports remain compatible; player/download/UI changes still require native reader proof on each platform.",
+        "positional_id_is_complete_identity": false,
+        "canonical_identity_context_path": "__nuvioMediaContext.tmdbMetadata.external_ids.imdb_id",
+        "canonical_identity_cache": "__nuvioTmdbMetadataCacheV1",
+        "canonical_identity_cache_entry_shape": "{state:\"ok\",metadata:{external_ids:{imdb_id:\"tt...\"}}}",
+        "user_tmdb_credential_required": false,
+        "tmdb_secret_projection_required": false,
+        "identity_hydration_status": "client-gap-host-bridge-required",
+        "identity_hydration_note": "Official runtime currently normalizes to the positional TMDB id without a canonical host TMDB/IMDb metadata bridge. A host bridge must populate the canonical context/cache after Core initialization and before getStreams, while keeping provider bytes and secrets untouched."
       },
       "brain_capabilities": [
-        "invocation", "media-type", "settings", "dns", "hub", "search", "telegram", "lkg",
-        "headers", "cookies", "redirects", "routes", "parser", "json", "javascript", "identity",
-        "detail", "series", "episode", "anime", "player", "embed", "html", "media", "xhr",
-        "token", "session", "referer", "origin", "ranking", "timing", "timeout", "range", "tls",
-        "decoder", "codec", "playlist", "runtime-version", "contract", "evidence", "duration"
+        "invocation",
+        "media-type",
+        "settings",
+        "dns",
+        "hub",
+        "search",
+        "telegram",
+        "lkg",
+        "headers",
+        "cookies",
+        "redirects",
+        "routes",
+        "parser",
+        "json",
+        "javascript",
+        "identity",
+        "detail",
+        "series",
+        "episode",
+        "anime",
+        "player",
+        "embed",
+        "html",
+        "media",
+        "xhr",
+        "token",
+        "session",
+        "referer",
+        "origin",
+        "ranking",
+        "timing",
+        "timeout",
+        "range",
+        "tls",
+        "decoder",
+        "codec",
+        "playlist",
+        "runtime-version",
+        "contract",
+        "evidence",
+        "duration"
       ],
       "versioned_features": [
-        {"id": "mobile-player-engine-2026-08", "min_version_code": 111, "scope": "reader-only", "brain_provider_mutation_required": false},
-        {"id": "repository-refresh-cadence-v1", "min_version_code": 115, "scope": "repository-reader", "brain_provider_mutation_required": false}
+        {
+          "id": "mobile-player-engine-2026-08",
+          "min_version_code": 111,
+          "scope": "reader-only",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "repository-refresh-cadence-v1",
+          "min_version_code": 115,
+          "scope": "repository-reader",
+          "brain_provider_mutation_required": false
+        }
       ]
     },
     "nuvio-desktop": {
       "family": "desktop-quickjs",
       "repository": "NuvioMedia/NuvioDesktop",
       "branch": "Dev",
-      "platforms": ["windows", "macos", "linux"],
+      "platforms": [
+        "windows",
+        "macos",
+        "linux"
+      ],
       "baseline": {
         "ref": "463cd0b72a8f08e2529efcbacfff2e7da8d4453a",
         "version_name": "0.1.17-alpha",
@@ -84,7 +185,10 @@
         "version_name": "0.4.14",
         "version_code": 118
       },
-      "supported_version_code": {"min": 17, "max": 118},
+      "supported_version_code": {
+        "min": 17,
+        "max": 118
+      },
       "provider_contract": {
         "runtime": "quickjs-positional-getStreams",
         "request_shape": "getStreams(tmdbId, mediaType, season, episode)",
@@ -103,25 +207,83 @@
         "stream_session_teardown_guaranteed": false,
         "navigation_cancellation_is_provider_fault": false,
         "session_lifecycle_note": "Cancelling the UI/request coroutine is not proof that an already-entered native QuickJS/fetch execution was torn down. Late/stuck work across media navigation is compatibility evidence only.",
-        "repository_readiness_note": "A visible repository is not execution proof. Native Labs must also verify production getEnabledScrapersForType(movie/tv) selection so stale profile/cache state cannot produce a false green while the application starts zero providers."
+        "repository_readiness_note": "A visible repository is not execution proof. Native Labs must also verify production getEnabledScrapersForType(movie/tv) selection so stale profile/cache state cannot produce a false green while the application starts zero providers.",
+        "positional_id_is_complete_identity": false,
+        "canonical_identity_context_path": "__nuvioMediaContext.tmdbMetadata.external_ids.imdb_id",
+        "canonical_identity_cache": "__nuvioTmdbMetadataCacheV1",
+        "canonical_identity_cache_entry_shape": "{state:\"ok\",metadata:{external_ids:{imdb_id:\"tt...\"}}}",
+        "user_tmdb_credential_required": false,
+        "tmdb_secret_projection_required": false,
+        "identity_hydration_status": "client-gap-host-bridge-required",
+        "identity_hydration_note": "Official runtime currently normalizes to the positional TMDB id without a canonical host TMDB/IMDb metadata bridge. A host bridge must populate the canonical context/cache after Core initialization and before getStreams, while keeping provider bytes and secrets untouched."
       },
       "brain_capabilities": [
-        "invocation", "media-type", "settings", "dns", "hub", "search", "telegram", "lkg",
-        "headers", "cookies", "redirects", "routes", "parser", "json", "javascript", "identity",
-        "detail", "series", "episode", "anime", "player", "embed", "html", "media", "xhr",
-        "token", "session", "referer", "origin", "ranking", "timing", "timeout", "range", "tls",
-        "decoder", "codec", "playlist", "runtime-version", "contract", "evidence", "duration"
+        "invocation",
+        "media-type",
+        "settings",
+        "dns",
+        "hub",
+        "search",
+        "telegram",
+        "lkg",
+        "headers",
+        "cookies",
+        "redirects",
+        "routes",
+        "parser",
+        "json",
+        "javascript",
+        "identity",
+        "detail",
+        "series",
+        "episode",
+        "anime",
+        "player",
+        "embed",
+        "html",
+        "media",
+        "xhr",
+        "token",
+        "session",
+        "referer",
+        "origin",
+        "ranking",
+        "timing",
+        "timeout",
+        "range",
+        "tls",
+        "decoder",
+        "codec",
+        "playlist",
+        "runtime-version",
+        "contract",
+        "evidence",
+        "duration"
       ],
       "versioned_features": [
-        {"id": "addon-force-refresh-no-cache-v1", "min_version_code": 20, "scope": "repository-reader", "brain_provider_mutation_required": false},
-        {"id": "plugin-selection-readiness-v1", "min_version_code": 118, "scope": "repository-reader", "brain_provider_mutation_required": false, "status": "client-bug-open", "issue": "NuvioMedia/NuvioDesktop#190"}
+        {
+          "id": "addon-force-refresh-no-cache-v1",
+          "min_version_code": 20,
+          "scope": "repository-reader",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "plugin-selection-readiness-v1",
+          "min_version_code": 118,
+          "scope": "repository-reader",
+          "brain_provider_mutation_required": false,
+          "status": "client-bug-open",
+          "issue": "NuvioMedia/NuvioDesktop#190"
+        }
       ]
     },
     "nuvio-tv": {
       "family": "android-tv-quickjs",
       "repository": "NuvioMedia/NuvioTV",
       "branch": "dev",
-      "platforms": ["android-tv"],
+      "platforms": [
+        "android-tv"
+      ],
       "baseline": {
         "ref": "6103a144485277f06ebc31456f1949c65b304e8e",
         "version_name": "0.8.4-beta",
@@ -132,11 +294,18 @@
         "version_name": "0.9.0-beta",
         "version_code": 1055
       },
-      "supported_version_code": {"min": 1045, "max": 1055},
+      "supported_version_code": {
+        "min": 1045,
+        "max": 1055
+      },
       "provider_contract": {
         "runtime": "quickjs-positional-getStreams",
         "request_shape": "getStreams(tmdbId, mediaType, season, episode)",
-        "runtime_globals": ["SCRAPER_ID", "SCRAPER_SETTINGS", "TMDB_API_KEY"],
+        "runtime_globals": [
+          "SCRAPER_ID",
+          "SCRAPER_SETTINGS",
+          "TMDB_API_KEY"
+        ],
         "stable_between_baseline_and_current": true,
         "changed_provider_contract_paths": [
           "app/src/main/java/com/nuvio/tv/data/repository/StreamRepositoryImpl.kt",
@@ -155,22 +324,96 @@
         "surface_note": "TV owns a distinct monolithic Android runtime/host implementation and is intentionally treated as a separate runtime family. Main stream headers project to behaviorHints.proxyHeaders.request; subtitle entries now also retain their own headers independently.",
         "stream_session_teardown_guaranteed": false,
         "navigation_cancellation_is_provider_fault": false,
-        "session_lifecycle_note": "Cancelling the UI/request coroutine is not proof that an already-entered native QuickJS/fetch execution was torn down. Late/stuck work across media navigation is compatibility evidence only."
+        "session_lifecycle_note": "Cancelling the UI/request coroutine is not proof that an already-entered native QuickJS/fetch execution was torn down. Late/stuck work across media navigation is compatibility evidence only.",
+        "positional_id_is_complete_identity": false,
+        "canonical_identity_context_path": "__nuvioMediaContext.tmdbMetadata.external_ids.imdb_id",
+        "canonical_identity_cache": "__nuvioTmdbMetadataCacheV1",
+        "canonical_identity_cache_entry_shape": "{state:\"ok\",metadata:{external_ids:{imdb_id:\"tt...\"}}}",
+        "user_tmdb_credential_required": false,
+        "tmdb_secret_projection_required": false,
+        "identity_hydration_status": "equivalent-runtime-metadata-bridge",
+        "identity_hydration_note": "TV currently supplies an audited TMDB runtime capability that lets Core hydrate external_ids/IMDb. This is equivalent identity capability, not permission for shared providers to depend on TMDB_API_KEY."
       },
       "brain_capabilities": [
-        "invocation", "media-type", "settings", "dns", "hub", "search", "telegram", "lkg",
-        "headers", "cookies", "redirects", "routes", "parser", "json", "javascript", "identity",
-        "detail", "series", "episode", "anime", "player", "embed", "html", "media", "xhr",
-        "token", "session", "referer", "origin", "ranking", "timing", "timeout", "range", "tls",
-        "decoder", "codec", "playlist", "runtime-version", "contract", "evidence", "duration"
+        "invocation",
+        "media-type",
+        "settings",
+        "dns",
+        "hub",
+        "search",
+        "telegram",
+        "lkg",
+        "headers",
+        "cookies",
+        "redirects",
+        "routes",
+        "parser",
+        "json",
+        "javascript",
+        "identity",
+        "detail",
+        "series",
+        "episode",
+        "anime",
+        "player",
+        "embed",
+        "html",
+        "media",
+        "xhr",
+        "token",
+        "session",
+        "referer",
+        "origin",
+        "ranking",
+        "timing",
+        "timeout",
+        "range",
+        "tls",
+        "decoder",
+        "codec",
+        "playlist",
+        "runtime-version",
+        "contract",
+        "evidence",
+        "duration"
       ],
       "versioned_features": [
-        {"id": "stream-session-cache-v1", "min_version_code": 1048, "scope": "repository", "brain_provider_mutation_required": false},
-        {"id": "stream-force-refresh-v1", "min_version_code": 1048, "scope": "repository", "brain_provider_mutation_required": false},
-        {"id": "local-plugin-playback-pause-v1", "min_version_code": 1048, "scope": "reader-lifecycle", "brain_provider_mutation_required": false},
-        {"id": "scraper-orchestration-bounded-v1", "min_version_code": 1050, "scope": "reader-lifecycle", "brain_provider_mutation_required": false},
-        {"id": "repository-write-dedup-v1", "min_version_code": 1050, "scope": "repository", "brain_provider_mutation_required": false},
-        {"id": "subtitle-specific-headers-v1", "min_version_code": 1055, "scope": "provider-result-projection", "brain_provider_mutation_required": true}
+        {
+          "id": "stream-session-cache-v1",
+          "min_version_code": 1048,
+          "scope": "repository",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "stream-force-refresh-v1",
+          "min_version_code": 1048,
+          "scope": "repository",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "local-plugin-playback-pause-v1",
+          "min_version_code": 1048,
+          "scope": "reader-lifecycle",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "scraper-orchestration-bounded-v1",
+          "min_version_code": 1050,
+          "scope": "reader-lifecycle",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "repository-write-dedup-v1",
+          "min_version_code": 1050,
+          "scope": "repository",
+          "brain_provider_mutation_required": false
+        },
+        {
+          "id": "subtitle-specific-headers-v1",
+          "min_version_code": 1055,
+          "scope": "provider-result-projection",
+          "brain_provider_mutation_required": true
+        }
       ]
     }
   }

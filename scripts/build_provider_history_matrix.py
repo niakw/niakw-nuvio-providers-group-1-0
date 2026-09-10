@@ -131,7 +131,7 @@ def classify(pid: str, baseline: dict[str,str], guard: dict[str,str], field_rows
         return "HISTORICAL_GREEN_UNRETESTED", "5.21.36 census had at least one verified lane; no newer published-byte guard is recorded here.", "Retest published bytes before touching route/data."
     if learn_owned:
         return "LEARN", "Residual repair debt is already handed to LEARN.", "Do not spend manual Repair loops unless a shared family fix is proven."
-    return "UNVERIFIED", "No current field/published-byte positive is recorded.", "Continue portfolio sweep; route/data debt goes to LEARN after bounded attempts."
+    return "UNVERIFIED", "No current positive evidence is recorded.", "Continue portfolio sweep; route/data debt goes to LEARN after bounded attempts."
 
 def main() -> int:
     current = load_json(CURRENT_MANIFEST)
@@ -163,7 +163,9 @@ def main() -> int:
     rows_out = []
     for pid, cur in sorted(current_map.items()):
         qrows = byq.get(pid) or []
-        baseline = lanes_from_rows(by36.get(pid) or qrows)
+        # Exact-history rule: a missing 5.21.36 observation stays missing. Never
+        # fill historical evidence with today's quick-yield rows.
+        baseline = lanes_from_rows(by36.get(pid) or [])
         guard = guard_lanes(guards.get(pid))
         field_rows = field.get(pid) or []
         klass, verdict, action = classify(pid, baseline, guard, field_rows, pid in candidates, pid in learn_map, old_guard.get(pid) or {})

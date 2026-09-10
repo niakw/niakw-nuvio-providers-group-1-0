@@ -43,22 +43,35 @@ for row in rows:
     if branding >= 0 and sanitizer <= branding:
         weak.append(provider_id)
 
-    # V6 currently has two supported builder shapes. Both are fail-closed when
-    # probeAllUrls=true: an unprobed row is dropped rather than leaked. The
-    # dedicated direct/fail-closed tests above execute this behavior; this 96/96
-    # projection test only verifies that every materialized provider contains one
-    # of the V6-owned hooks plus the managed probeAllUrls policy.
+    # V6 owns the terminal boundary. V7 deliberately keeps that exact managed
+    # owner/fix id and strengthens one cleanup path so an exact proof-correlated
+    # non-direct player fallback can survive without weakening probeAllUrls.
     compact = "".join(text.split())
-    current_hook = (
+    current_v6_hook = (
         "if(coreMediaProof(item.stream,item.url))returnclearCoreMediaProof(item.stream);"
         "if(!item.probe)returnconfig.probeAllUrls?null:clearCoreMediaProof(item.stream);"
     )
-    legacy_hook = "if(!item.probe)returnconfig.probeAllUrls?null:item.stream;"
-    if current_hook not in compact and legacy_hook not in compact:
+    legacy_v6_hook = "if(!item.probe)returnconfig.probeAllUrls?null:item.stream;"
+    current_v7_hook = (
+        "if(correlatedPlayerFallback(item.stream,item.url))returnclearPrivateProofs(item.stream);"
+        "if(coreMediaProof(item.stream,item.url))returnclearPrivateProofs(item.stream);"
+        "if(!item.probe)returnconfig.probeAllUrls?null:clearPrivateProofs(item.stream);"
+    )
+    supported_hook = current_v6_hook in compact or legacy_v6_hook in compact or current_v7_hook in compact
+    if not supported_hook:
         weak.append(provider_id)
+    if current_v7_hook in compact:
+        for v7_required in (
+            "NUVIO_STREAM_OUTPUT_CORRELATED_PLAYER_FALLBACK_V7",
+            "functioncorrelatedPlayerFallback(stream,url)",
+            "functionclearPrivateProofs(stream)",
+            "delete stream.__nuvioCorrelatedPlayerFallbackV1",
+        ):
+            if "".join(v7_required.split()) not in compact:
+                weak.append(provider_id)
     if '"probeAllUrls":true' not in compact:
         weak.append(provider_id)
 
 assert not missing, f"providers missing terminal sanitizer V6: {missing}"
-assert not weak, f"providers missing current V6 fail-closed ownership/policy: {sorted(set(weak))}"
-print(f"global stream output guard passed: providers={len(rows)} managed_terminal_sanitizer={len(rows)} startfix_v3=true fail_closed_v6=true")
+assert not weak, f"providers missing current V6/V7 fail-closed ownership/policy: {sorted(set(weak))}"
+print(f"global stream output guard passed: providers={len(rows)} managed_terminal_sanitizer={len(rows)} startfix_v3=true fail_closed_v6=true v7_extension_accepted=true")

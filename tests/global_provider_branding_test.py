@@ -41,7 +41,7 @@ reapplied = global_provider_branding_v1.apply(
     context={"provider_id": "purstream"},
 )
 assert reapplied == patched, "global provider branding must be byte-idempotent"
-assert "post-presentation-name-title-quality-v7" in patched
+assert "post-presentation-lossless-source-label-v8" in patched
 assert patched.count("/* STARTFIX:CORE.PROVIDER_BRANDING.V1 */") == 1
 assert patched.count("/* CLOSEFIX:CORE.PROVIDER_BRANDING.V1 */") == 1
 

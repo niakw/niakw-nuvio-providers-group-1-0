@@ -105,9 +105,9 @@ Un provider anime peut devoir accepter les trois transports :
 
 Cela permet :
 
-- anime épisodique via transport série/`tv` ;
-- film anime via transport `movie` ;
-- namespace `anime` lorsqu’il est exposé par le client.
+- anime épisodique via transport `tv`/`series` ;
+- namespace `anime` lorsqu’il est exposé par le client ;
+- transport `movie` uniquement lorsqu’une capacité canonique `movie` est réellement déclarée.
 
 **Cela n’ajoute jamais une capacité canonique `movie` ou `tv`.** Le Core doit rejeter une œuvre non-anime sur un provider anime-only après classification autoritative, avant le réseau provider lorsque l’information nécessaire est déjà disponible.
 
@@ -300,7 +300,7 @@ Le stripping HTML générique par regexp est interdit. Les findings CodeQL sur c
 3. `provider.model.routeData` est la source route canonique.
 4. Reconnaissance vide ≠ quarantaine.
 5. `canonicalSupportedTypes` ≠ `supportedTypes`.
-6. Anime canonique peut être lancé via `anime/tv/movie` sans devenir movie/tv canonique.
+6. Anime canonique peut être lancé via `anime/tv/series` sans devenir movie/tv canonique.
 7. Gate capacité avant réseau provider.
 8. Quick/Deep ne réparent ni ne reconstruisent et ne finalisent pas une release en routine.
 9. `release-finalize.yml` ne modifie que la transaction release de bytes déjà acceptés.

@@ -49,7 +49,7 @@ La distinction est obligatoire :
 - `canonicalSupportedTypes` = capacité sémantique réelle ;
 - `supportedTypes` = surface de lancement Nuvio.
 
-Un provider canonique anime-only peut donc avoir `supportedTypes = [anime, tv, movie]`. Les trois voies doivent être testables sans ajouter `movie` ou `tv` à sa capacité canonique.
+Un provider canonique anime-only peut donc avoir `supportedTypes = [anime, tv, series]`. Les voies `anime`, `tv` et `series` restent des lancements compatibles sans élargir la capacité canonique ; `movie` n’est exposé que s’il est canonique.
 
 `tests/native_five_lab_coverage_test.py` doit calculer et vérifier dynamiquement cette relation à chaque changement de manifest.
 

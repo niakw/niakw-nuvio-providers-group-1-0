@@ -26,14 +26,17 @@ async function getStreams(tmdbId, mediaType) {
 module.exports = { getStreams };
 '''
 
-# The workflow applies the one-shot source patch before this test. Keeping this
-# assertion explicit prevents a false green against the older V28 runtime.
+# The canonical media owner is now V31: V30's unified cancellation budget plus
+# the pre-network semantic gate. Keep this assertion explicit so cancellation is
+# never tested against an older owner while avoiding a stale V30-only contract.
 source = PATCH.read_text(encoding="utf-8")
 for needle in (
-    "tmdb-data-contract-launch-gate-v29-native-abort-race",
+    "tmdb-data-contract-launch-gate-v31-pre-network-semantic-gate",
     "function requestAbortPromise(controller,requestToken)",
     "Promise.race([base.apply(this,args),timeoutPromise,abortPromise])",
     "Promise.race([base.apply(this,args),abortPromise])",
+    'if(type==="movie"&&!hasMovie&&!hasAnime)return null;',
+    'if(type==="tv"&&!hasTv&&!hasAnime)return null;',
 ):
     assert needle in source, needle
 
@@ -84,4 +87,4 @@ with tempfile.TemporaryDirectory() as tmp:
     test.write_text(runner, encoding="utf-8")
     subprocess.run(["node", str(test), str(provider)], check=True, timeout=5)
 
-print("provider native abort-ignorant cancellation contract passed")
+print("provider native abort-ignorant cancellation contract passed on media fast-gate v31")

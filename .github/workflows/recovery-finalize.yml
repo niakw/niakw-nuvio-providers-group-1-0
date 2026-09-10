@@ -1,0 +1,113 @@
+name: Recovery Finalize Provider Generation
+# revision: 8 - authoritative tv+series transport + VidEasy identity-safe rematerialization
+
+on:
+  push:
+    branches:
+      - workbench/systemic-recovery-20260909
+    paths:
+      - '.github/workflows/recovery-finalize.yml'
+      - 'scripts/finalize_publish_contracts.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recovery-finalize-provider-generation
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NUVIO_PROVIDER_V3_CONTEXT: workspace
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Apply final source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/finalize_publish_contracts.py
+          python -m py_compile scripts/finalize_publish_contracts.py scripts/materialize_provider_v3_all.py scripts/enforce_provider_v3_semantic_transport_contract_v5.py scripts/reapply_published_overrides.py scripts/provider_base_store.py
+      - name: Rematerialize canonical ProviderBase and all 96 providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/materialize_provider_base_v3_store.py
+          python scripts/provider_base_store.py validate
+          python scripts/provider_base_store.py validate --artifacts
+          python scripts/materialize_provider_v3_all.py
+          python scripts/prune_unreferenced_providers.py
+          python scripts/generate_language_manifests.py --manifest manifest.json --report health-report.json
+      - name: Verify repaired generation without network mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/canonical_media_types_test.py
+          python tests/provider_anime_semantic_transport_contract_test.py
+          python tests/provider_v3_documentation_contract_test.py
+          python tests/global_provider_branding_test.py
+          python tests/provider_html_filter_security_test.py --published
+          python tests/provider_v3_minimizer_published_test.py
+          python tests/global_media_type_resolution_test.py
+          python tests/global_stream_presentation_test.py
+          python tests/global_stream_presentation_pipeline_test.py
+          python tests/global_stream_identity_test.py
+          python tests/runtime_capability_media_safety_v4_test.py
+          python tests/global_playback_integrity_policy_test.py
+          python tests/stream_output_sanitizer_fail_closed_test.py
+          python scripts/audit_provider_v3_static.py
+          python scripts/verify_provider_v3_reverse_rebuild.py
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json'))
+          d=json.load(open('automation/provider-repair-disposition.json'))
+          rows=m.get('scrapers') or []
+          assert len(rows)==96, len(rows)
+          assert sum(row.get('enabled') is not False for row in rows)==6
+          allowed_semantic={'movie','tv','anime'}
+          allowed_transport=allowed_semantic|{'series'}
+          for row in rows:
+              pid=row.get('id') or '<unknown>'
+              transport=[str(v).strip().lower() for v in (row.get('supportedTypes') or []) if str(v).strip()]
+              canonical=[str(v).strip().lower() for v in (row.get('canonicalSupportedTypes') or transport) if str(v).strip() and str(v).strip().lower()!='series']
+              assert transport and set(transport)<=allowed_transport, (pid, transport)
+              assert canonical and set(canonical)<=allowed_semantic, (pid, canonical)
+              assert 'series' not in canonical, (pid, canonical)
+              if 'anime' in canonical or 'tv' in canonical:
+                  assert 'tv' in transport and 'series' in transport, (pid, canonical, transport)
+              assert ('movie' in transport)==('movie' in canonical), (pid, canonical, transport)
+          assert d.get('stateCounts')=={'on': 6, 'repair': 74, 'off': 16}, d.get('stateCounts')
+          print('FINAL_REPAIR_DISPOSITION_OK providers=96 on=6 repair=74 off=16 transport=tv+series movie_only_when_canonical')
+          PY
+          python scripts/generate_release_hashes.py
+          python scripts/validate_release_integrity.py
+      - name: Commit deterministic regeneration to workbench
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --stat
+          if git diff --cached --quiet; then
+            echo 'No deterministic regeneration changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix(release): rematerialize 96 providers with authoritative transport and safe HTML scanning'
+          git push origin "HEAD:${GITHUB_REF_NAME}"

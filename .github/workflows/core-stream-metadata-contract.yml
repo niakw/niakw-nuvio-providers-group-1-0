@@ -2,18 +2,22 @@ name: CORE - Stream Metadata Contract
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'workbench/**'
     paths:
       - '.github/workflows/core-stream-metadata-contract.yml'
       - 'scripts/provider_patches/global_stream_facts_v1.py'
       - 'scripts/provider_patches/global_stream_identity_v1.py'
       - 'scripts/provider_patches/global_stream_presentation_v1.py'
+      - 'scripts/provider_patches/global_provider_branding_v1.py'
       - 'scripts/provider_patches/stream_output_sanitizer_v6.py'
       - 'engine_v2/src/stream-presentation.mjs'
       - 'scripts/nuvio_client_lab.cjs'
       - 'tests/core_runtime_nonregression_contract_test.py'
       - 'tests/global_stream_metadata_preservation_contract_test.py'
       - 'tests/global_stream_presentation_pipeline_test.py'
+      - 'tests/provider_branding_contract_test.py'
       - 'tests/stream_quality_recovery_tv_test.py'
       - 'tests/stream_output_sanitizer_direct_normalization_test.py'
       - 'tests/stream_output_sanitizer_fail_closed_test.py'
@@ -54,6 +58,8 @@ jobs:
         run: python3 tests/global_stream_metadata_preservation_contract_test.py
       - name: Validate Core stream presentation pipeline
         run: python3 tests/global_stream_presentation_pipeline_test.py
+      - name: Validate final provider branding preserves visible player metadata
+        run: python3 tests/provider_branding_contract_test.py
       - name: Validate quality recovery contract
         run: python3 tests/stream_quality_recovery_tv_test.py
       - name: Validate sanitizer transport and header preservation

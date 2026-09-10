@@ -19,6 +19,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -370,8 +371,15 @@ def route_record(derived: dict[str, Any], semantic_type: str, fixture_slug: str,
         "fixture": fixture_slug,
         "requestIndex": int(derived.get("index") or 0),
         "providerValueCorrelation": bool(derivation.get("providerValueCorrelation")),
+        "externalIdentityCorrelation": bool(derivation.get("externalIdentityCorrelation")),
         "requestSpec": copy.deepcopy(request_spec),
         "requestSpecReusable": bool(derivation.get("requestSpecReusable")),
+        # ROUTE_RECOVERY_RESPONSE_VALUE_DIAGNOSTICS_V20_4
+        # proof_body_values is already redacted by the worker for sensitive keys.
+        "requestSpecSubstitutions": copy.deepcopy(derivation.get("requestSpecSubstitutions") or []),
+        "requestSpecResidue": copy.deepcopy(derivation.get("requestSpecResidue") or []),
+        "proofBodyKind": fetch.get("body_kind"),
+        "proofBodyValues": copy.deepcopy(fetch.get("body_values") or {}),
         "status": int(fetch.get("status") or 0),
         "contentType": fetch.get("content_type"),
         "proofModelVersion": PROOF_VERSION,
@@ -392,9 +400,28 @@ _BLANK_DYNAMIC_QUERY_KEYS = {
 }
 
 
+# ROUTE_RECOVERY_STRUCTURED_EXTERNAL_ID_V13
+_FLAT_ROUTE_DYNAMIC_TOKENS = (
+    "{query}", "{title}", "{slug}", "{id}", "{tmdbId}", "{tmdb_id}",
+    "{imdbId}", "{imdb_id}", "{season}", "{episode}",
+)
+
+
 def generic_execution_route(record: dict[str, Any]) -> bool:
-    """Whether routes[] may replay this call without losing HTTP/dataflow semantics."""
-    spec = request_spec(record) or {"method": str(record.get("method") or "GET").upper()}
+    """Whether routes[] may replay this call without losing HTTP/dataflow semantics.
+
+    A flat route is deliberately stricter than an observed HTTP request. It must
+    carry a reusable request spec *and* at least one proof-derived dynamic token.
+    Static fixture/player/file paths remain routeData evidence only.
+    """
+    if record.get("requestSpecReusable") is not True:
+        return False
+    route = str(record.get("route") or "").strip()
+    if not route or not any(token.casefold() in route.casefold() for token in _FLAT_ROUTE_DYNAMIC_TOKENS):
+        return False
+    spec = request_spec(record)
+    if not isinstance(spec, dict):
+        return False
     if str(spec.get("method") or "GET").upper() != "GET":
         return False
     if spec.get("body"):
@@ -406,7 +433,6 @@ def generic_execution_route(record: dict[str, Any]) -> bool:
     }
     if nontrivial:
         return False
-    route = str(record.get("route") or "").strip()
     try:
         query = urllib.parse.parse_qsl(urllib.parse.urlsplit(route).query, keep_blank_values=True)
     except ValueError:
@@ -416,11 +442,23 @@ def generic_execution_route(record: dict[str, Any]) -> bool:
     return True
 
 
+def _flat_route_blocklist(route_data: list[dict[str, Any]]) -> set[str]:
+    """Freshly observed non-flat routes cannot keep an obsolete flat baseline alive."""
+    blocked: set[str] = set()
+    for row in route_data:
+        if not isinstance(row, dict):
+            continue
+        route = str(row.get("route") or "").strip()
+        if route and not generic_execution_route(row):
+            blocked.add(route)
+    return blocked
+
+
 def _identity_bearing_runtime_route(value: object) -> bool:
     route = str(value or "").strip().casefold()
     if not route:
         return False
-    if any(token in route for token in ("{query}", "{title}", "{slug}", "{id}", "{tmdbid}", "{tmdb_id}")):
+    if any(token in route for token in ("{query}", "{title}", "{slug}", "{id}", "{tmdbid}", "{tmdb_id}", "{imdbid}", "{imdb_id}")):
         return True
     path = urllib.parse.urlsplit(route).path
     return bool(path and (
@@ -438,13 +476,15 @@ def select_runtime_routes(
     existing_routes: list[str],
     candidate_routes: list[str],
     execution_routes: list[str],
+    blocked_routes: set[str] | None = None,
 ) -> tuple[list[str], bool]:
-    """Do not demote a richer published runtime plan to weak observations."""
-    execution = unique(execution_routes, 192)
+    """Prefer fresh executable proof and never preserve freshly disproven flat DATA."""
+    blocked = blocked_routes or set()
+    execution = unique([route for route in execution_routes if route not in blocked], 192)
     if any(_identity_bearing_runtime_route(route) for route in execution):
         return execution, False
     for baseline in (existing_routes, candidate_routes):
-        current = unique(baseline, 192)
+        current = unique([route for route in baseline if route not in blocked], 192)
         if any(_identity_bearing_runtime_route(route) for route in current):
             return current, True
     return execution, False
@@ -456,6 +496,47 @@ def as_recipe_route(record: dict[str, Any], base: str | None) -> str:
     if base and origin == base:
         return route
     return origin.rstrip("/") + "/" + route.lstrip("/") if origin else route
+
+
+# ROUTE_RECOVERY_BODY_SEARCH_RECIPE_V6
+_REPAIR_RECIPE_NON_EXECUTABLE_HOSTS = {"arm.haglund.dev", "v3-cinemeta.strem.io"}
+
+
+# ROUTE_RECOVERY_COMPOSITE_SEARCH_TEMPLATE_V21_8
+def _record_has_search_query(row: dict[str, Any]) -> bool:
+    route = str(row.get("route") or "")
+    if any(marker in route for marker in ("{query}", "{queryDots}", "{query_dots}")):
+        return True
+    spec = request_spec(row)
+    if not isinstance(spec, dict):
+        return False
+    # Request specs are already sanitized/abstracted proof DATA. Searching the
+    # serialized structure here only detects the canonical placeholder produced
+    # by proof abstraction; it never recovers arbitrary provider code/data.
+    serialized = json.dumps(spec, ensure_ascii=False, sort_keys=True)
+    return any(marker in serialized for marker in ("{query}", "{queryDots}", "{query_dots}"))
+
+
+def _repair_recipe_origin_allowed(row: dict[str, Any]) -> bool:
+    try:
+        host = (urllib.parse.urlsplit(str(row.get("origin") or "")).hostname or "").casefold()
+    except ValueError:
+        return False
+    # Shared metadata helpers may appear in a positive provider task but are not
+    # provider stream resolvers. ProviderBase already treats these hosts as
+    # non-executable knowledge; recipe synthesis must obey the same boundary.
+    return bool(host and host not in _REPAIR_RECIPE_NON_EXECUTABLE_HOSTS)
+
+
+# ROUTE_RECOVERY_TYPED_POSITIVE_ONLY_V8
+def _typed_terminal_positive(row: dict[str, Any]) -> bool:
+    return bool(
+        (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0)
+        and row.get("taskLastRequestIndex") is not None
+        and int(row.get("requestIndex") or 0) == int(row.get("taskLastRequestIndex"))
+        and row.get("requestSpecReusable") is True
+        and row.get("providerValueCorrelation") is not True
+    )
 
 
 def build_simple_api_recipe(records: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -472,27 +553,37 @@ def build_simple_api_recipe(records: list[dict[str, Any]]) -> dict[str, Any] | N
     for rows in by_fixture.values():
         rows.sort(key=lambda item: int(item.get("requestIndex") or 0))
 
-    searches = [row for row in records if row.get("role") == "search" and "{query}" in str(row.get("route"))]
+    searches = [
+        row for row in records
+        if row.get("role") in {"search", "detail", "api"}
+        and _record_has_search_query(row)
+        and _repair_recipe_origin_allowed(row)
+    ]
     search = searches[0] if searches else None
     base = str(search.get("origin") or "") if search else ""
 
     movie_candidates = [
         row for row in records
-        if row.get("semanticType") == "movie"
+        if _repair_recipe_origin_allowed(row)
+        and row.get("semanticType") == "movie"
+        and (search is not None or _typed_terminal_positive(row))
         and row.get("role") in {"detail", "api", "source", "player"}
         and ("{id}" in str(row.get("route")) or "{tmdbId}" in str(row.get("route")))
         and (not base or row.get("origin") == base)
     ]
     episode_candidates = [
         row for row in records
-        if row.get("semanticType") == "tv"
+        if _repair_recipe_origin_allowed(row)
+        and row.get("semanticType") == "tv"
+        and (search is not None or _typed_terminal_positive(row))
         and ("{season}" in str(row.get("route")) or "{episode}" in str(row.get("route")))
         and ("{id}" in str(row.get("route")) or "{tmdbId}" in str(row.get("route")))
         and (not base or row.get("origin") == base)
     ]
     direct_candidates = [
         row for row in records
-        if search is None and "{tmdbId}" in str(row.get("route"))
+        if _repair_recipe_origin_allowed(row)
+        and search is None and "{tmdbId}" in str(row.get("route"))
         and row.get("role") in {"api", "source", "detail"}
     ]
 
@@ -516,7 +607,7 @@ def build_simple_api_recipe(records: list[dict[str, Any]]) -> dict[str, Any] | N
         spec = request_spec(episode)
         if spec:
             recipe["episodeRequest"] = spec
-    if not search and direct_candidates:
+    if not search and direct_candidates and not (movie_candidates or episode_candidates):
         direct = sorted(direct_candidates, key=lambda row: int(row.get("requestIndex") or 0))[0]
         recipe["base"] = str(direct.get("origin") or "") or recipe.get("base")
         recipe["directRoute"] = as_recipe_route(direct, recipe.get("base"))
@@ -524,11 +615,71 @@ def build_simple_api_recipe(records: list[dict[str, Any]]) -> dict[str, Any] | N
         if spec:
             recipe["directRequest"] = spec
 
+    # ROUTE_RECOVERY_TERMINAL_SEARCH_RECIPE_V6
+    # A task can be positive after a search *and* several later detail/player
+    # requests. Never attribute the task's final streams to the search merely
+    # because it happened earlier. Direct-search replay is valid only when that
+    # reusable search request is the final observed provider request in the task.
+    if "searchRoute" in recipe and not ({"movieRoute", "episodeRoute"} & recipe.keys()):
+        terminal = next((
+            row for row in searches
+            if (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0)
+            and row.get("taskLastRequestIndex") is not None
+            and int(row.get("requestIndex") or 0) == int(row.get("taskLastRequestIndex"))
+        ), None)
+        if terminal is not None:
+            recipe.pop("searchRoute", None)
+            recipe.pop("searchRequest", None)
+            recipe["base"] = str(terminal.get("origin") or "") or recipe.get("base")
+            recipe["directRoute"] = as_recipe_route(terminal, recipe.get("base"))
+            spec = request_spec(terminal)
+            if spec:
+                recipe["directRequest"] = spec
+            recipe["terminalSearchProof"] = True
+    # ROUTE_RECOVERY_TYPED_RESOLVER_API_V7
+    def _typed_resolver_terminal(row: dict[str, Any]) -> bool:
+        route = str(row.get("route") or "")
+        return bool(
+            "{tmdbId}" in route
+            and "{id}" not in route
+            and row.get("providerValueCorrelation") is not True
+            and row.get("requestSpecReusable") is True
+            and (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0)
+            and row.get("taskLastRequestIndex") is not None
+            and int(row.get("requestIndex") or 0) == int(row.get("taskLastRequestIndex"))
+            and str(row.get("origin") or "").startswith(("http://", "https://"))
+        )
+
+    typed_rows: list[dict[str, Any]] = []
+    if movie_candidates:
+        typed_rows.append(sorted(movie_candidates, key=lambda row: int(row.get("requestIndex") or 0))[-1])
+    if episode_candidates:
+        typed_rows.append(sorted(episode_candidates, key=lambda row: int(row.get("requestIndex") or 0))[-1])
+    if not search and typed_rows and all(_typed_resolver_terminal(row) for row in typed_rows):
+        recipe["recipeKind"] = "typed-resolver-api"
+
     route_keys = {"searchRoute", "movieRoute", "episodeRoute", "directRoute"}
     if not route_keys.intersection(recipe):
         return None
     if "searchRoute" in recipe and not ({"movieRoute", "episodeRoute"} & recipe.keys()):
         return None
+
+    # NIAKVIO_PROVIDER_SOURCE_PLAN_V10
+    if "searchRoute" in recipe:
+        positive_types = {
+            str(row.get("semanticType") or "").strip().casefold()
+            for row in records
+            if int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0
+        }
+        covered_types: set[str] = set()
+        if recipe.get("movieRoute"):
+            covered_types.add("movie")
+        if recipe.get("episodeRoute"):
+            covered_types.update({"tv", "anime"})
+        uncovered = sorted(value for value in positive_types if value and value not in covered_types)
+        if uncovered:
+            recipe["allowGenericFallback"] = True
+            recipe["partialCoverageFallback"] = uncovered
     return recipe
 
 
@@ -573,6 +724,105 @@ def source_for_provider(
     }
 
 
+# ROUTE_RECOVERY_ADAPTIVE_RETRY_V1
+_TRANSIENT_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+_TRANSIENT_ERROR_TOKENS = (
+    "timeout", "timed out", "etimedout", "econnreset", "econnrefused",
+    "eai_again", "temporary failure", "socket hang up", "network error",
+    "network_exception", "fetch failed", "worker_no_result",
+)
+_NON_RETRYABLE_ERROR_TOKENS = (
+    "module_not_found", "provider module blocked by source policy",
+)
+
+
+def _worker_success_fetch_count(result: dict[str, Any]) -> int:
+    total = 0
+    for observation in result.get("network") or []:
+        fetch = observation_fetch(observation)
+        if fetch is not None and success(fetch):
+            total += 1
+    return total
+
+
+def _worker_retry_reason(result: dict[str, Any]) -> str:
+    if int(result.get("streams") or 0) > 0 or int(result.get("rawStreams") or 0) > 0:
+        return ""
+    status = str(result.get("status") or "").casefold()
+    error = str(result.get("error") or "").casefold()
+    combined = status + " " + error
+    if any(token in combined for token in _NON_RETRYABLE_ERROR_TOKENS):
+        return ""
+    if status in {"runtime_error"}:
+        return ""
+    if status in {"worker_no_result", "timeout", "network_error", "network_exception"}:
+        return status
+    if any(token in combined for token in _TRANSIENT_ERROR_TOKENS):
+        return next(token for token in _TRANSIENT_ERROR_TOKENS if token in combined)
+    for observation in result.get("network") or []:
+        fetch = observation_fetch(observation)
+        if fetch is None:
+            continue
+        code = int(fetch.get("status") or 0)
+        if code in _TRANSIENT_HTTP_STATUSES:
+            return f"http-{code}"
+        fetch_error = str(fetch.get("error") or "").casefold()
+        if any(token in fetch_error for token in _TRANSIENT_ERROR_TOKENS):
+            return next(token for token in _TRANSIENT_ERROR_TOKENS if token in fetch_error)
+    return ""
+
+
+def _run_worker_adaptive(
+    provider_id: str,
+    source_path: Path,
+    fixture: dict[str, Any],
+    *,
+    upstream: bool,
+    timeout: int,
+    attempts: int,
+) -> dict[str, Any]:
+    best: dict[str, Any] | None = None
+    best_score: tuple[int, int, int, int, int] = (-1, -1, -1, -1, -1)
+    used = 0
+    for attempt in range(1, max(1, attempts) + 1):
+        used = attempt
+        try:
+            result = run_worker(source_path, fixture, upstream=upstream, timeout=timeout)
+        except Exception as exc:
+            result = {
+                "status": "worker_no_result",
+                "error": type(exc).__name__,
+                "streams": 0,
+                "rawStreams": 0,
+                "network": [],
+                "serverAccessible": False,
+                "serverSuccess": False,
+            }
+        score = (
+            1 if int(result.get("streams") or 0) > 0 else 0,
+            int(result.get("rawStreams") or 0),
+            1 if result.get("serverSuccess") else 0,
+            _worker_success_fetch_count(result),
+            len(result.get("network") or []),
+        )
+        if best is None or score > best_score:
+            best = result
+            best_score = score
+        reason = _worker_retry_reason(result)
+        if not reason or attempt >= max(1, attempts):
+            break
+        print(
+            "FIELD_ROUTE_RECOVERY_RETRY "
+            f"provider={provider_id} fixture={fixture.get('slug')} "
+            f"attempt={attempt + 1}/{max(1, attempts)} reason={reason}",
+            flush=True,
+        )
+    assert best is not None
+    best = dict(best)
+    best["repairAttempts"] = used
+    return best
+
+
 def recover_one(
     provider_id: str,
     local_row: dict[str, Any],
@@ -581,6 +831,7 @@ def recover_one(
     current_upstream: dict[str, dict[str, Any]],
     tmp: Path,
     timeout: int,
+    attempts: int,
 ) -> dict[str, Any]:
     try:
         source_path, source_meta = source_for_provider(provider_id, source_id, lkg, current_upstream, {provider_id: local_row}, tmp)
@@ -591,8 +842,33 @@ def recover_one(
     tasks_report: list[dict[str, Any]] = []
     for semantic_type in semantic_types(local_row["entry"]):
         for fixture in FIXTURES[semantic_type]:
-            result = run_worker(source_path, fixture, upstream=bool(source_id), timeout=timeout)
-            fetches = [value for row in result.get("network") or [] if (value := observation_fetch(row)) is not None]
+            result = _run_worker_adaptive(
+                provider_id,
+                source_path,
+                fixture,
+                upstream=bool(source_id),
+                timeout=timeout,
+                attempts=attempts,
+            )
+            # ROUTE_RECOVERY_CAUSAL_EXTERNAL_HINT_V11_1
+            # Preserve the exact network order of infrastructure identity hints,
+            # but carry no helper URL/method into provider execution authority.
+            fetches: list[dict[str, Any]] = []
+            provider_fetch_count = 0
+            for network_row in result.get("network") or []:
+                if not isinstance(network_row, dict):
+                    continue
+                value = observation_fetch(network_row)
+                if value is not None:
+                    fetches.append(value)
+                    provider_fetch_count += 1
+                    continue
+                hints = network_row.get("response_value_hints")
+                if network_row.get("infrastructure") and isinstance(hints, list) and hints:
+                    fetches.append({
+                        "proof_hint_only": True,
+                        "response_value_hints": copy.deepcopy(hints[:80]),
+                    })
             task = {
                 "provider_id": provider_id,
                 "semantic_type": semantic_type,
@@ -602,9 +878,19 @@ def recover_one(
             }
             derived = derive_task_routes(task)
             task_records = []
+            task_last_request_index = max(
+                (int(item.get("index") or 0) for item in derived if isinstance(item, dict)),
+                default=-1,
+            )
             for item in derived:
                 record = route_record(item, semantic_type, fixture["slug"], source_meta)
                 if record:
+                    # Task-level output counts are context, not causal attribution.
+                    # The request ordering marker is what allows recipe selection
+                    # to prove that a search request was actually terminal.
+                    record["taskStreamCount"] = int(result.get("streams") or 0)
+                    record["taskRawStreamCount"] = int(result.get("rawStreams") or 0)
+                    record["taskLastRequestIndex"] = task_last_request_index
                     records.append(record)
                     task_records.append(record)
             tasks_report.append({
@@ -615,7 +901,7 @@ def recover_one(
                 "rawStreamCount": result.get("rawStreams", 0),
                 "serverAccessible": result.get("serverAccessible", False),
                 "serverSuccess": result.get("serverSuccess", False),
-                "providerRequestCount": len(fetches),
+                "providerRequestCount": provider_fetch_count,
                 "provenRouteCount": len(task_records),
                 "error": result.get("error"),
             })
@@ -629,7 +915,14 @@ def recover_one(
         seen.add(fp)
         deduped.append(row)
     routes = unique([row.get("route") for row in deduped], 192)
-    execution_routes = unique([row.get("route") for row in deduped if generic_execution_route(row)], 192)
+    # ROUTE_RECOVERY_HELPER_EVIDENCE_ONLY_V11_1
+    # TMDB/Cinemeta helper calls may carry critical identity evidence (IMDb, title,
+    # aliases), but they are not provider execution routes. Keep them in routeData
+    # and proven routes for causality while excluding them from the runtime plan.
+    execution_routes = unique([
+        row.get("route") for row in deduped
+        if _repair_recipe_origin_allowed(row) and generic_execution_route(row)
+    ], 192)
     recipe = build_simple_api_recipe([row for row in deduped if row.get("requestSpecReusable") is True])
     return {
         "providerId": provider_id,
@@ -644,6 +937,263 @@ def recover_one(
         "apiRecipe": recipe,
         "tasks": tasks_report,
     }
+
+
+def _proof_execution_origin(origin: object, patch: dict[str, Any]) -> str:
+    raw = str(origin or "").strip()
+    try:
+        parsed = urllib.parse.urlsplit(raw)
+    except ValueError:
+        return ""
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+    host = (parsed.hostname or "").casefold()
+    target = ""
+    # NIAKVIO_PROVIDER_RUNTIME_DOMAIN_AUTHORITY_V10_1: only explicitly promoted runtime DATA may redirect execution.
+    for key in ("runtime_domain_replacements",):
+        mapping = patch.get(key)
+        if not isinstance(mapping, dict):
+            continue
+        candidate = str(mapping.get(host) or "").strip()
+        if candidate:
+            target = candidate
+            break
+    if target:
+        if "://" not in target:
+            target = f"{parsed.scheme}://{target}"
+        try:
+            target_parts = urllib.parse.urlsplit(target)
+            if target_parts.hostname:
+                netloc = target_parts.netloc
+                parsed = parsed._replace(netloc=netloc)
+        except ValueError:
+            pass
+    return urllib.parse.urlunsplit(parsed)
+
+
+def _positive_proof_search_bases(route_data: list[dict[str, Any]], patch: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for row in route_data:
+        if not isinstance(row, dict) or row.get("requestSpecReusable") is not True:
+            continue
+        if not (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0):
+            continue
+        if not _repair_recipe_origin_allowed(row):
+            continue
+        if row.get("role") != "search" and not _record_has_search_query(row):
+            continue
+        base = _proof_execution_origin(row.get("origin"), patch)
+        if base and base not in out:
+            out.append(base)
+    return out[:6]
+
+
+# ROUTE_RECOVERY_EXTERNAL_IDENTITY_BASE_V11
+def _positive_external_detail_bases(route_data: list[dict[str, Any]], patch: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for row in route_data:
+        if not isinstance(row, dict) or row.get("requestSpecReusable") is not True:
+            continue
+        if not (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0):
+            continue
+        if not _repair_recipe_origin_allowed(row):
+            continue
+        route = str(row.get("route") or "")
+        if row.get("externalIdentityCorrelation") is not True and "{imdbId}" not in route:
+            continue
+        base = _proof_execution_origin(row.get("origin"), patch)
+        if base and base not in out:
+            out.append(base)
+    return out[:6]
+
+
+def _looks_direct_media_route(route: object) -> bool:
+    value = str(route or "").strip().casefold()
+    return bool(re.search(r"\.(?:m3u8|mpd|mp4|mkv|webm)(?:[?#]|$)|/(?:hls|dash|stream)(?:/|[?#]|$)", value))
+
+
+def _positive_external_identity_plan(route_data: list[dict[str, Any]], patch: dict[str, Any]) -> list[dict[str, Any]]:
+    """Persist only reusable detail-page requests, never fixture HLS/player output."""
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in route_data:
+        if not isinstance(row, dict) or row.get("requestSpecReusable") is not True:
+            continue
+        if row.get("externalIdentityCorrelation") is not True:
+            continue
+        if not (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0):
+            continue
+        if not _repair_recipe_origin_allowed(row):
+            continue
+        route = str(row.get("route") or "").strip()
+        if "{imdbid}" not in route.casefold() or row.get("role") != "detail":
+            continue
+        if _looks_direct_media_route(route):
+            continue
+        base = _proof_execution_origin(row.get("origin"), patch)
+        if not base:
+            continue
+        spec = request_spec(row) or {"method": str(row.get("method") or "GET").upper()}
+        fingerprint = (base, route, json.dumps(spec, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        out.append({
+            "base": base,
+            "route": route,
+            "requestSpec": copy.deepcopy(spec),
+            "proofModelVersion": PROOF_VERSION,
+            "sourceRole": "external-identity-detail",
+        })
+    return out[:4]
+
+
+# ROUTE_RECOVERY_SEARCH_REQUEST_PLAN_V14
+def _fresh_positive_origin(row: dict[str, Any]) -> str:
+    if not isinstance(row, dict) or not _repair_recipe_origin_allowed(row):
+        return ""
+    if not (int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0):
+        return ""
+    status = int(row.get("status") or 0)
+    if status < 200 or status >= 400:
+        return ""
+    raw = str(row.get("origin") or "").strip()
+    try:
+        parsed = urllib.parse.urlsplit(raw)
+    except ValueError:
+        return ""
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+# ROUTE_RECOVERY_SEARCH_REQUEST_PLAN_V14_1
+def _positive_proof_hosts(route_data: list[dict[str, Any]]) -> list[str]:
+    """Protect only proof-owned resolver origins from stale domain rewrites.
+
+    Search/detail endpoints can be transient, rate-limited mirrors. Their success
+    remains route evidence but cannot revoke an explicit current-domain mapping.
+    Source/player origins are terminal resolver authority and may do so.
+    """
+    out: list[str] = []
+    for row in route_data:
+        role = str(row.get("role") or "").strip().casefold() if isinstance(row, dict) else ""
+        if role not in {"source", "player"}:
+            continue
+        base = _fresh_positive_origin(row)
+        if not base:
+            continue
+        try:
+            host = (urllib.parse.urlsplit(base).hostname or "").casefold()
+        except ValueError:
+            host = ""
+        if host and host not in out:
+            out.append(host)
+    return out[:24]
+
+
+def _positive_search_request_plan(route_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in route_data:
+        if not isinstance(row, dict) or row.get("requestSpecReusable") is not True:
+            continue
+        if row.get("role") != "search" and not _record_has_search_query(row):
+            continue
+        base = _fresh_positive_origin(row)
+        route = str(row.get("route") or "").strip()
+        spec = request_spec(row)
+        if not base or not route or not isinstance(spec, dict):
+            continue
+        if not _record_has_search_query(row):
+            continue
+        fingerprint = (
+            base,
+            route,
+            json.dumps(spec, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        )
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        semantic = str(row.get("semanticType") or "").strip().casefold()
+        out.append({
+            "base": base,
+            "route": route,
+            "requestSpec": copy.deepcopy(spec),
+            "proofModelVersion": PROOF_VERSION,
+            "sourceRole": "catalog-search",
+            "semanticTypes": [semantic] if semantic in {"movie", "tv", "anime"} else [],
+        })
+    return out[:6]
+
+
+# ROUTE_RECOVERY_CORRELATED_VALUE_PLAN_V18
+def _positive_provider_value_plans(route_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only positive same-task search -> provider-value request chains."""
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in route_data:
+        if not isinstance(row, dict):
+            continue
+        semantic = str(row.get("semanticType") or "").strip().casefold()
+        fixture = str(row.get("fixture") or "").strip()
+        if semantic not in {"movie", "tv", "anime"} or not fixture:
+            continue
+        grouped.setdefault((semantic, fixture), []).append(row)
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for (semantic, _fixture), rows in grouped.items():
+        if not any(int(row.get("taskStreamCount") or 0) > 0 or int(row.get("taskRawStreamCount") or 0) > 0 for row in rows):
+            continue
+        correlated = [
+            row for row in rows
+            if row.get("providerValueCorrelation") is True
+            and row.get("requestSpecReusable") is True
+            # ROUTE_RECOVERY_RESPONSE_VALUE_CORRELATION_V20
+            and ("{id}" in str(row.get("route") or "") or "{slug}" in str(row.get("route") or ""))
+            and _fresh_positive_origin(row)
+            and isinstance(request_spec(row), dict)
+        ]
+        if not correlated:
+            continue
+        correlated.sort(key=lambda row: int(row.get("requestIndex") or 0))
+        first_index = int(correlated[0].get("requestIndex") or 0)
+        searches = [
+            row for row in rows
+            if row.get("requestSpecReusable") is True
+            and _record_has_search_query(row)
+            and _fresh_positive_origin(row)
+            and isinstance(request_spec(row), dict)
+            and int(row.get("requestIndex") or 0) < first_index
+        ]
+        if not searches:
+            continue
+        searches.sort(key=lambda row: int(row.get("requestIndex") or 0))
+        search = searches[-1]
+        plan = {
+            "searchBase": _fresh_positive_origin(search),
+            "searchRoute": str(search.get("route") or "").strip(),
+            "searchRequestSpec": copy.deepcopy(request_spec(search)),
+            "steps": [
+                {
+                    "base": _fresh_positive_origin(row),
+                    "route": str(row.get("route") or "").strip(),
+                    "requestSpec": copy.deepcopy(request_spec(row)),
+                    "role": str(row.get("role") or "detail").strip().casefold(),
+                }
+                # ROUTE_RECOVERY_PROVIDER_VALUE_CAUSAL_DEPTH_V20_5
+                for row in correlated[:8]
+            ],
+            "semanticTypes": [semantic],
+            "proofModelVersion": PROOF_VERSION,
+            "sourceRole": "provider-value-correlation",
+        }
+        fingerprint = json.dumps(plan, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        out.append(plan)
+    return out[:12]
 
 
 def apply_recovery(report: dict[str, Any]) -> dict[str, Any]:
@@ -680,11 +1230,67 @@ def apply_recovery(report: dict[str, Any]) -> dict[str, Any]:
         proven_routes = unique(recovered.get("routes") or [], 192)
         execution_routes = unique(recovered.get("executionRoutes") or [], 192)
         route_data = copy.deepcopy(recovered.get("routeData") or [])
+        proof_search_bases = _positive_proof_search_bases(route_data, patch)
+        if proof_search_bases:
+            patch["proof_search_bases"] = proof_search_bases
+            model["proofSearchBases"] = proof_search_bases
+        else:
+            patch.pop("proof_search_bases", None)
+            model.pop("proofSearchBases", None)
+        proof_detail_bases = _positive_external_detail_bases(route_data, patch)
+        if proof_detail_bases:
+            patch["proof_detail_bases"] = proof_detail_bases
+            model["proofDetailBases"] = proof_detail_bases
+        else:
+            patch.pop("proof_detail_bases", None)
+            model.pop("proofDetailBases", None)
+        proof_protected_hosts = _positive_proof_hosts(route_data)
+        if proof_protected_hosts:
+            patch["proof_protected_hosts"] = proof_protected_hosts
+            model["proofProtectedHosts"] = proof_protected_hosts
+        else:
+            patch.pop("proof_protected_hosts", None)
+            model.pop("proofProtectedHosts", None)
+
+        search_request_plan = _positive_search_request_plan(route_data)
+        if search_request_plan:
+            patch["search_request_plan"] = copy.deepcopy(search_request_plan)
+            model["searchRequestPlan"] = copy.deepcopy(search_request_plan)
+            patch["identity_input"] = {
+                "mode": "catalog_search",
+                "requires_tmdb_before_run": True,
+                "required_fields": ["title", "mediaType"],
+            }
+        else:
+            patch.pop("search_request_plan", None)
+            model.pop("searchRequestPlan", None)
+
+        provider_value_plan = _positive_provider_value_plans(route_data)
+        if provider_value_plan:
+            patch["provider_value_plan"] = copy.deepcopy(provider_value_plan)
+            model["providerValuePlan"] = copy.deepcopy(provider_value_plan)
+        else:
+            patch.pop("provider_value_plan", None)
+            model.pop("providerValuePlan", None)
+
+        external_identity_plan = _positive_external_identity_plan(route_data, patch)
+        if external_identity_plan:
+            patch["external_identity_plan"] = copy.deepcopy(external_identity_plan)
+            model["externalIdentityPlan"] = copy.deepcopy(external_identity_plan)
+            patch["identity_input"] = {
+                "mode": "external_id",
+                "requires_tmdb_before_run": True,
+                "required_fields": ["tmdbId", "mediaType"],
+            }
+        else:
+            patch.pop("external_identity_plan", None)
+            model.pop("externalIdentityPlan", None)
         recipe = recovered.get("apiRecipe") if isinstance(recovered.get("apiRecipe"), dict) else None
         existing_routes = unique(patch.get("learned_routes") or [], 192)
         candidate_routes = unique(patch.get("candidate_learned_routes") or [], 192)
+        blocked_flat_routes = _flat_route_blocklist(route_data)
         runtime_routes, preserved_baseline_plan = select_runtime_routes(
-            existing_routes, candidate_routes, execution_routes
+            existing_routes, candidate_routes, execution_routes, blocked_flat_routes
         )
         patch["learned_routes"] = runtime_routes
         model["routes"] = runtime_routes
@@ -733,6 +1339,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=int(os.environ.get("NIAKVIO_ROUTE_RECOVERY_WORKERS", "8")))
     parser.add_argument("--timeout", type=int, default=int(os.environ.get("NIAKVIO_ROUTE_RECOVERY_TIMEOUT", "55")))
+    parser.add_argument("--attempts", type=int, default=int(os.environ.get("NIAKVIO_ROUTE_RECOVERY_ATTEMPTS", "3")))
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--provider", action="append", default=[])
     parser.add_argument("--out", type=Path, default=OUT)
@@ -752,6 +1359,7 @@ def main() -> int:
     current_upstream = current_upstream_catalog(source_config())
     workers = max(1, min(12, int(args.workers)))
     timeout = max(15, min(120, int(args.timeout)))
+    attempts = max(1, min(4, int(args.attempts)))
     rows: list[dict[str, Any]] = []
     started = time.monotonic()
 
@@ -768,6 +1376,7 @@ def main() -> int:
                     current_upstream,
                     tmp,
                     timeout,
+                    attempts,
                 ): provider_id
                 for provider_id in provider_ids
             }
@@ -800,6 +1409,7 @@ def main() -> int:
         "simpleApiRecipeCount": sum(1 for row in rows if isinstance(row.get("apiRecipe"), dict)),
         "statusCounts": dict(sorted(counts.items())),
         "durationMs": round((time.monotonic() - started) * 1000),
+        "maxAttemptsPerTask": attempts,
         "staticCandidatesExecutable": False,
         "requestSpecModel": "ROUTE_RECOVERY_REQUEST_SPEC_V1",
         "proofRequirements": [

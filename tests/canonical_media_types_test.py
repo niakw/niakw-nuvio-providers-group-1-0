@@ -6,18 +6,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = {"movie", "tv", "anime"}
+TRANSPORT = CANONICAL | {"series"}
 
 
-def canonical_types(raw: object, label: str) -> tuple[str, ...]:
-    assert isinstance(raw, list) and raw, f"{label}: supportedTypes must be a non-empty list"
+def normalized_types(raw: object, label: str, allowed: set[str]) -> tuple[str, ...]:
+    assert isinstance(raw, list) and raw, f"{label}: media types must be a non-empty list"
     types = tuple(str(value).strip().lower() for value in raw)
-    assert len(types) == len(set(types)), f"{label}: repeated supportedTypes {types}"
-    invalid = [value for value in types if value not in CANONICAL]
-    assert not invalid, (
-        f"{label}: non-canonical media types {invalid}; canonical vocabulary is "
-        "movie|tv|anime and series/show/other belong only at client input boundaries"
-    )
+    assert len(types) == len(set(types)), f"{label}: repeated media types {types}"
+    invalid = [value for value in types if value not in allowed]
+    assert not invalid, f"{label}: invalid media types {invalid}; allowed={sorted(allowed)}"
     return types
+
+
+def expected_transport(canonical: tuple[str, ...]) -> tuple[str, ...]:
+    wanted = list(canonical)
+    if "anime" in canonical and "tv" not in wanted:
+        wanted.append("tv")
+    if "tv" in wanted and "series" not in wanted:
+        wanted.append("series")
+    return tuple(wanted)
 
 
 def validate_manifest(path: Path) -> tuple[list[dict], int]:
@@ -34,11 +41,30 @@ def validate_manifest(path: Path) -> tuple[list[dict], int]:
         key = provider_id.casefold()
         assert key not in seen, f"{path}: duplicate provider id {provider_id!r}"
         seen.add(key)
-        types = canonical_types(row.get("supportedTypes"), f"{path}:{provider_id}")
+
+        transport = normalized_types(row.get("supportedTypes"), f"{path}:{provider_id}:supportedTypes", TRANSPORT)
         canonical_raw = row.get("canonicalSupportedTypes")
-        canonical = canonical_types(canonical_raw, f"{path}:{provider_id}:canonicalSupportedTypes") if canonical_raw else types
+        if canonical_raw:
+            canonical = normalized_types(canonical_raw, f"{path}:{provider_id}:canonicalSupportedTypes", CANONICAL)
+        else:
+            canonical = tuple(value for value in transport if value != "series")
+            assert canonical, f"{path}:{provider_id}: missing canonical media capability"
+            assert all(value in CANONICAL for value in canonical)
+
+        assert "series" not in canonical, (path, provider_id, canonical)
+        assert transport == expected_transport(canonical), (
+            path,
+            provider_id,
+            canonical,
+            transport,
+            expected_transport(canonical),
+        )
+        assert ("movie" in transport) == ("movie" in canonical), (path, provider_id, canonical, transport)
+        if "anime" in canonical or "tv" in canonical:
+            assert {"tv", "series"} <= set(transport), (path, provider_id, canonical, transport)
+
         anime += int("anime" in canonical)
-        out.append({"id": provider_id, "key": key, "types": types, "canonical": canonical, "row": row})
+        out.append({"id": provider_id, "key": key, "transport": transport, "canonical": canonical, "row": row})
     return out, anime
 
 
@@ -62,13 +88,19 @@ def validate_catalog(path: Path) -> tuple[dict[str, dict], dict[str, list[str]]]
         scraper_key = scraper_id.casefold()
         assert scraper_key not in scraper_ids, f"{path}: duplicate scraper id {scraper_id!r}"
         scraper_ids.add(scraper_key)
-        transport_types = canonical_types(scraper.get("supportedTypes"), f"{path}:{canonical_id}/{scraper_id}")
-        canonical_raw = scraper.get("canonicalSupportedTypes")
-        types = canonical_types(canonical_raw, f"{path}:{canonical_id}/{scraper_id}:canonicalSupportedTypes") if canonical_raw else transport_types
+
+        canonical_raw = scraper.get("canonicalSupportedTypes") or scraper.get("supportedTypes")
+        canonical = normalized_types(canonical_raw, f"{path}:{canonical_id}/{scraper_id}:canonical", CANONICAL)
         projections = entry.get("projections") or {}
         assert isinstance(projections, dict), f"{path}:{canonical_id}: projections must be an object"
-        by_canonical[canonical_key] = {"canonicalId": canonical_id, "scraperId": scraper_id, "types": types, "projections": projections}
+        by_canonical[canonical_key] = {
+            "canonicalId": canonical_id,
+            "scraperId": scraper_id,
+            "types": canonical,
+            "projections": projections,
+        }
 
+    assert len(by_canonical) == 96, len(by_canonical)
     orders = data.get("manifestOrder") or {}
     assert isinstance(orders, dict), f"{path}: manifestOrder must be an object"
     normalized_orders: dict[str, list[str]] = {}
@@ -98,21 +130,14 @@ def assert_projection(manifest_path: Path, projection: str, catalog: dict[str, d
     assert actual_ids == expected_ids, f"{manifest_path}: provider order/identity is not the deterministic {projection} projection of provider_catalog.json"
 
     for row, canonical_key in zip(manifest_rows, order, strict=True):
-        expected_types = catalog[canonical_key]["types"]
-        # This normalized equality is the canonical contract. Do not add a second
-        # byte-for-byte assertion on the optional raw canonicalSupportedTypes field.
-        assert row["canonical"] == expected_types, (
+        expected = catalog[canonical_key]["types"]
+        assert row["canonical"] == expected, (
             f"{manifest_path}:{row['id']}: canonical media types drift from provider_catalog.json: "
-            f"{row['canonical']} != {expected_types}"
+            f"{row['canonical']} != {expected}"
         )
-        expected_transport = list(expected_types)
-        if "anime" in expected_types:
-            for compatible in ("tv", "movie"):
-                if compatible not in expected_transport:
-                    expected_transport.append(compatible)
-        assert row["types"] == tuple(expected_transport), (
-            f"{manifest_path}:{row['id']}: Nuvio transport supportedTypes drift: "
-            f"{row['types']} != {tuple(expected_transport)}"
+        assert row["transport"] == expected_transport(expected), (
+            f"{manifest_path}:{row['id']}: transport projection drift: "
+            f"{row['transport']} != {expected_transport(expected)}"
         )
     return len(manifest_rows), anime
 
@@ -120,7 +145,7 @@ def assert_projection(manifest_path: Path, projection: str, catalog: dict[str, d
 catalog, orders = validate_catalog(ROOT / "provider_catalog.json")
 canonical_count, canonical_anime = assert_projection(ROOT / "manifest.json", "general", catalog, orders)
 vf_count, vf_anime = assert_projection(ROOT / "vf/manifest.json", "vf", catalog, orders)
-assert canonical_count >= 80, canonical_count
+assert canonical_count == 96, canonical_count
 assert canonical_anime > 0, "general projection must retain anime providers"
 assert vf_count > 0, vf_count
 assert vf_anime > 0, "VF projection must retain its anime providers"
@@ -135,6 +160,6 @@ for slug in ("jujutsu-kaisen-s01e01", "mushoku-tensei-s01e01"):
 print(
     "canonical media type tests passed: "
     f"catalog={len(catalog)} general={canonical_count} vf={vf_count} "
-    f"anime_general={canonical_anime} anime_vf={vf_anime} vocabulary=movie|tv|anime "
-    "anime_transport=anime+tv+movie"
+    f"anime_general={canonical_anime} anime_vf={vf_anime} semantic=movie|tv|anime "
+    "transport=movie|tv|anime|series anime_or_tv_requires=tv+series movie_only_when_canonical"
 )

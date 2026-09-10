@@ -61,20 +61,49 @@ permissions:
 
 jobs:
   analyze:
-    name: "CodeQL · ${{ matrix.language }}"
+    # A single matrix keeps one immutable init/analyze action pair in the workflow,
+    # while JavaScript/TypeScript is split into bounded databases. The union of
+    # source + providers + provider-bases still scans every JS/TS file with the
+    # complete security-extended query suite.
+    name: "${{ matrix.check_name }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          - language: actions
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
-          - language: python
-            build-mode: none
+          - check_name: "CodeQL · actions"
+            language: actions
+            build_mode: none
+            config: ""
+            category: "/language:actions"
+          - check_name: "CodeQL · python"
+            language: python
+            build_mode: none
+            config: ""
+            category: "/language:python"
+          - check_name: "CodeQL · javascript-typescript · source"
+            language: javascript-typescript
+            build_mode: none
+            config: |
+              paths-ignore:
+                - providers/**
+                - provider-bases/**
+            category: "/language:javascript-typescript/shard:source"
+          - check_name: "CodeQL · javascript-typescript · providers"
+            language: javascript-typescript
+            build_mode: none
+            config: |
+              paths:
+                - providers/**
+            category: "/language:javascript-typescript/shard:providers"
+          - check_name: "CodeQL · javascript-typescript · provider-bases"
+            language: javascript-typescript
+            build_mode: none
+            config: |
+              paths:
+                - provider-bases/**
+            category: "/language:javascript-typescript/shard:provider-bases"
 
     steps:
       - name: Checkout repository
@@ -86,10 +115,26 @@ jobs:
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          build-mode: ${{ matrix.build_mode }}
           queries: security-extended
+          config: ${{ matrix.config }}
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: ${{ matrix.category }}
+
+  javascript-result:
+    # Preserve the historical required-check name. Because `analyze` is one matrix
+    # job, this result becomes green only after Actions, Python and all three JS
+    # shards have succeeded.
+    name: "CodeQL · javascript-typescript"
+    if: always()
+    needs: analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce complete CodeQL matrix
+        env:
+          MATRIX_RESULT: ${{ needs.analyze.result }}
+        run: test "$MATRIX_RESULT" = "success"

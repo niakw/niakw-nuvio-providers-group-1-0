@@ -57,11 +57,43 @@ function blockedProviderModule(request) {
   return BLOCKED_PROVIDER_MODULES.has(canonicalProviderModule(request));
 }
 
+/* NIAKVIO_PROVIDER_WORKER_PACKAGE_RESOLUTION_V1 */
 function installModuleRestrictions() {
   const originalLoad = Module._load;
+  const packageJsonPath = path.join(__dirname, '..', 'package.json');
+  const packageRequire = Module.createRequire(packageJsonPath);
+  let allowedProviderPackages = new Set();
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    allowedProviderPackages = new Set(Object.keys(packageJson.dependencies || {}));
+  } catch {}
+  const packageRoot = (request) => {
+    const value = String(request || '').trim();
+    if (!value || value.startsWith('.') || path.isAbsolute(value) || value.startsWith('node:')) return '';
+    const parts = value.split('/').filter(Boolean);
+    if (!parts.length) return '';
+    return value.startsWith('@') && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : parts[0];
+  };
+  const safeProviderPackageRequest = (request) => {
+    const value = String(request || '').trim();
+    // Both names resolve to the same pinned Cheerio package in this repository.
+    // Force parser-only code so the sandbox never has to permit Undici/node:net.
+    if (value === 'cheerio' || value === 'cheerio-without-node-native') return 'cheerio/slim';
+    return value;
+  };
   Module._load = function restrictedLoad(request, parent, isMain) {
     if (blockedProviderModule(request)) throw new Error(`provider module blocked: ${request}`);
-    return originalLoad.call(this, request, parent, isMain);
+    try {
+      return originalLoad.call(this, request, parent, isMain);
+    } catch (error) {
+      const root = packageRoot(request);
+      if (!root || !allowedProviderPackages.has(root) || error?.code !== 'MODULE_NOT_FOUND') throw error;
+      // Providers are copied to a temp directory for isolation, so approved bare
+      // packages cannot naturally reach the repository's pinned node_modules.
+      // Resolve only an explicitly declared dependency from NiakVIO's package root.
+      const resolved = packageRequire.resolve(safeProviderPackageRequest(request));
+      return originalLoad.call(this, resolved, parent, isMain);
+    }
   };
 
   if (typeof process.getBuiltinModule === 'function') {
@@ -163,6 +195,7 @@ function safeRequestMetadata(input, init = {}) {
 
 
 /* NUVIO_PROVIDER_WORKER_ROUTE_PROOF_V1 */
+/* NUVIO_PROVIDER_WORKER_ROUTE_PROOF_REQUEST_CLONE_V2 */
 const ROUTE_PROOF_SENSITIVE_KEY = /api[_-]?key|token|auth|authorization|signature|sig|secret|password|cookie|session|nonce/i;
 const ROUTE_PROOF_SAFE_HEADER = new Set([
   'accept', 'accept-language', 'content-type', 'origin', 'referer', 'referrer',
@@ -171,6 +204,8 @@ const ROUTE_PROOF_SAFE_HEADER = new Set([
 const ROUTE_PROOF_ID_KEYS = new Set([
   'id', '_id', 'media_id', 'mediaid', 'post_id', 'postid', 'content_id', 'contentid',
   'movie_id', 'movieid', 'series_id', 'seriesid', 'show_id', 'showid', 'slug',
+  // NUVIO_PROVIDER_WORKER_EXTERNAL_IDENTITY_HINT_V11
+  'imdb', 'imdb_id', 'imdbid',
 ]);
 
 function routeProofSanitizedUrl(input) {
@@ -244,12 +279,32 @@ function routeProofBody(body) {
       return out;
     } catch {}
   }
+  /* NUVIO_PROVIDER_WORKER_TEXT_BODY_PROOF_V9 */
   out.body_kind = 'text';
+  // Raw text is evidence-only and is never copied directly into Provider DATA.
+  // Keep it in-memory only when it is bounded, printable and clearly not a
+  // credential/token-shaped value. Python must still abstract fixture identity
+  // before a request spec can become reusable.
+  const printable = !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text);
+  const tokenLike = /(?:^|[^A-Za-z0-9])(?:eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|[A-Fa-f0-9]{40,}|[A-Za-z0-9_-]{64,})(?:$|[^A-Za-z0-9])/i.test(text);
+  const sensitiveLike = /(?:api[_-]?key|access[_-]?token|authorization|bearer|secret|password|cookie|session|signature|nonce)\s*[:=]/i.test(text);
+  if (text.length <= 1024 && printable && !tokenLike && !sensitiveLike) {
+    out.body_fields = ['$text'];
+    out.body_values['$text'] = text;
+  }
   return out;
 }
 
-function routeProofRequestMetadata(input, init, headers) {
-  const body = routeProofBody(init?.body);
+async function routeProofRequestMetadata(input, init, headers) {
+  let rawBody = init?.body;
+  if (rawBody == null) {
+    try {
+      if (typeof Request !== 'undefined' && input instanceof Request) {
+        rawBody = await input.clone().text();
+      }
+    } catch {}
+  }
+  const body = routeProofBody(rawBody);
   return {
     proof_url: routeProofSanitizedUrl(input),
     proof_headers: routeProofHeaders(headers),
@@ -292,11 +347,41 @@ async function routeProofResponseHints(response) {
         routeProofCollectJsonHints(parsed, out, 0);
       } catch {}
     }
-    if (!out.length && /(html|text)/.test(type)) {
+    if (/(html|text)/.test(type)) {
+      /* NUVIO_PROVIDER_RESPONSE_VALUE_CORRELATION_V20 */
       const re = /(?:data[-_])?(id|media[-_]id|post[-_]id|content[-_]id|movie[-_]id|series[-_]id|show[-_]id|slug)[\s"'=:\-]+([A-Za-z0-9._~-]{2,160})/gi;
       let match;
       while ((match = re.exec(text)) !== null && out.length < 100) {
         out.push({ key: String(match[1]).toLowerCase().replace(/-/g, '_'), value: String(match[2]) });
+      }
+
+      // Catalogue identities are frequently encoded only in href/src paths.
+      // Record bounded safe values as hints; they acquire authority only if a
+      // later provider request consumes the exact same value.
+      const attrRe = /\b(?:href|src|data-src)\s*=\s*(["'])([^"']{1,900})\1/gi;
+      let attrMatch, scanned = 0;
+      while ((attrMatch = attrRe.exec(text)) !== null && scanned++ < 240 && out.length < 100) {
+        let parsed;
+        try { parsed = new URL(attrMatch[2], response?.url || 'https://invalid.local/'); }
+        catch { continue; }
+        for (const rawPart of parsed.pathname.split('/').filter(Boolean).slice(-4)) {
+          let part = rawPart;
+          try { part = decodeURIComponent(rawPart); } catch {}
+          const withoutExt = part.replace(/\.html?$/i, '');
+          const composite = withoutExt.match(/^(\d{2,})[-_.]([A-Za-z0-9._~-]{2,150})$/);
+          if (composite) {
+            out.push({ key: 'id', value: composite[1] });
+            if (out.length < 100 && withoutExt.length <= 160) out.push({ key: 'slug', value: withoutExt });
+          }
+        }
+        for (const [rawKey, rawValue] of [...parsed.searchParams.entries()].slice(0, 20)) {
+          const key = String(rawKey || '').toLowerCase();
+          const value = String(rawValue || '').trim();
+          if (!key || ROUTE_PROOF_SENSITIVE_KEY.test(key) || value.length < 3 || value.length > 160) continue;
+          if (!/^[A-Za-z0-9._~-]+$/.test(value)) continue;
+          out.push({ key, value });
+          if (out.length >= 100) break;
+        }
       }
     }
   } catch {}
@@ -510,7 +595,7 @@ function installPolyfills(context = {}) {
       if (!headers.has('User-Agent')) headers.set('User-Agent', userAgent);
       const requestMeta = safeRequestMetadata(input, init);
       const routeProofEnabled = context.routeProofTrace === true;
-      const routeProofRequest = routeProofEnabled ? routeProofRequestMetadata(input, init, headers) : {};
+      const routeProofRequest = routeProofEnabled ? await routeProofRequestMetadata(input, init, headers) : {};
       const rawRequestUrl = (() => {
         try { return typeof input === 'string' ? input : input?.url || ''; } catch { return ''; }
       })();

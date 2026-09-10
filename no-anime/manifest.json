@@ -13,8 +13,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/purstream--nuvio--4f14d92ed5acea15.js",
-      "enabled": true,
+      "filename": "../providers/purstream-b80f30945b337719.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -42,8 +42,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/flemmix--nuvio--6876e66b0fdbe558.js",
-      "enabled": true,
+      "filename": "../providers/flemmix-dc1988503140fafc.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/flemmix.webp",
       "contentLanguage": [
         "fr"
@@ -71,8 +71,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/uhdmovies--nuvio--06605366759e9eb0.js",
-      "enabled": true,
+      "filename": "../providers/uhdmovies-c689656203bf82d1.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -97,7 +97,7 @@
       "supportedTypes": [
         "movie"
       ],
-      "filename": "../providers/movieshunt--nuvio--6507cde095b0bbec.js",
+      "filename": "../providers/movieshunt-febb4c10400cb53b.js",
       "enabled": true,
       "hasSettings": false,
       "formats": [
@@ -121,8 +121,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/zinkmovies--nuvio--91a61f3a777a274a.js",
-      "enabled": true,
+      "filename": "../providers/zinkmovies-ef3b1362eacd0549.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -153,8 +153,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vegamovies--nuvio--7d7e048d7ef964dd.js",
-      "enabled": true,
+      "filename": "../providers/vegamovies-aaec95cc7b0cf003.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -182,8 +182,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/hindmoviez--nuvio--8d560a8ccf037a6b.js",
-      "enabled": true,
+      "filename": "../providers/hindmoviez-2c4da7ce58ee81c4.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -212,8 +212,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/4khdhub--nuvio--42fc747c208674e3.js",
-      "enabled": true,
+      "filename": "../providers/4khdhub-2ed82a21d18d206d.js",
+      "enabled": false,
       "formats": [
         "mkv"
       ],
@@ -238,7 +238,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/persianstremio--nuvio--0d5ef668a8d05840.js",
+      "filename": "../providers/persianstremio-3e4d64272b9d8671.js",
       "enabled": true,
       "hasSettings": false,
       "formats": [
@@ -267,8 +267,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/desiflix--nuvio--3d1ab0c96779aca6.js",
-      "enabled": true,
+      "filename": "../providers/desiflix-52c2a61ac8df0137.js",
+      "enabled": false,
       "hasSettings": false,
       "formats": [
         "mp4",
@@ -305,8 +305,8 @@
       ],
       "formats": [],
       "hasSettings": false,
-      "filename": "../providers/kehflix--nuvio--c589545b2579199a.js",
-      "enabled": true,
+      "filename": "../providers/kehflix-2452c9e13894a08a.js",
+      "enabled": false,
       "disabledPlatforms": [],
       "canonicalSupportedTypes": [
         "movie",
@@ -325,8 +325,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/4khdhubnew--nuvio--afea9bf137663006.js",
-      "enabled": true,
+      "filename": "../providers/4khdhubnew-ea8c10813ac8a61c.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -353,8 +353,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/allmovieland--nuvio--e6e2df6b32964207.js",
-      "enabled": true,
+      "filename": "../providers/allmovieland-6ffa2c4bd62debe1.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "m3u8"
@@ -384,8 +384,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/anikototv--nuvio--5e351b6f9693f4d9.js",
-      "enabled": true,
+      "filename": "../providers/anikototv-88f0667084f46176.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4"
@@ -402,32 +402,6 @@
       ]
     },
     {
-      "id": "ANIZONE",
-      "name": "🌀 AniZone",
-      "description": "AniZone high-quality anime streaming with multi-audio and soft subtitles",
-      "version": "1.0.40",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "anime",
-        "tv",
-        "series"
-      ],
-      "filename": "../providers/anizone--nuvio--becf8731360fcd58.js",
-      "enabled": true,
-      "formats": [
-        "m3u8"
-      ],
-      "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/anizone.webp",
-      "contentLanguage": [
-        "en"
-      ],
-      "disabledPlatforms": [],
-      "canonicalSupportedTypes": [
-        "anime",
-        "tv"
-      ]
-    },
-    {
       "id": "CASTLE",
       "name": "🏰 Castle",
       "description": "Multi Lang provider",
@@ -438,8 +412,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/castle--nuvio--5f92106210cec916.js",
-      "enabled": true,
+      "filename": "../providers/castle-ef34e82fb95c2fb5.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -466,8 +440,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/cineby--nuvio--e37abec46d99e9e9.js",
-      "enabled": true,
+      "filename": "../providers/cineby-fbf624f0c08784d6.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "m3u8"
@@ -494,8 +468,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/cinemacity--nuvio--109b55bb2db32d37.js",
-      "enabled": true,
+      "filename": "../providers/cinemacity-2586c80f7006256e.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -524,8 +498,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/cinemm--nuvio--0e45dc19d30f7289.js",
-      "enabled": true,
+      "filename": "../providers/cinemm-5874e0cb5a5b58f2.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -553,8 +527,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/coflix--nuvio--578d4c0823c4cdad.js",
-      "enabled": true,
+      "filename": "../providers/coflix-ae1248db7109c8ab.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/coflix.webp",
       "contentLanguage": [
         "fr"
@@ -583,8 +557,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/dooflix--nuvio--becb6e1e05d01652.js",
-      "enabled": true,
+      "filename": "../providers/dooflix-b643f04107590c51.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -612,8 +586,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/dulourd--nuvio--4c183bfa113a3e2f.js",
-      "enabled": true,
+      "filename": "../providers/dulourd-e8b72c0f760e3198.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/dulourd.webp",
       "contentLanguage": [
         "fr"
@@ -642,8 +616,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/french-manga--nuvio--a09a3974a793b1d7.js",
-      "enabled": true,
+      "filename": "../providers/french-manga-e4e58cb9335d764d.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/french-manga.webp",
       "contentLanguage": [
         "fr"
@@ -671,8 +645,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/goated--nuvio--7c52c56c5e98ed31.js",
-      "enabled": true,
+      "filename": "../providers/goated-8f8dfab51c9b60d7.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mkv",
@@ -704,8 +678,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/hdghartv--nuvio--447c522a2f64fc37.js",
-      "enabled": true,
+      "filename": "../providers/hdghartv-fcc6f35744574afd.js",
+      "enabled": false,
       "hasSettings": false,
       "formats": [
         "m3u8"
@@ -733,8 +707,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/hdhub4u--nuvio--81bb51ffabc0b60d.js",
-      "enabled": true,
+      "filename": "../providers/hdhub4u-165e2d2c08ef5e99.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -761,8 +735,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/movieblast--nuvio--fc4dd175f412bd15.js",
-      "enabled": true,
+      "filename": "../providers/movieblast-b4626bc07ae44ad6.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -793,8 +767,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/movies4u--nuvio--e4fe80cb6c9c0103.js",
-      "enabled": true,
+      "filename": "../providers/movies4u-602a61d3c2b2afc0.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -823,8 +797,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/moviesdrive--nuvio--13a2b21c4ff62b87.js",
-      "enabled": true,
+      "filename": "../providers/moviesdrive-44026b3d3b141b95.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -853,8 +827,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/moviesmod--nuvio--aab04b4f01edb77b.js",
-      "enabled": true,
+      "filename": "../providers/moviesmod-aca390c02a075738.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -883,7 +857,7 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/movix--nuvio--41fa200531e30ef0.js",
+      "filename": "../providers/movix-234afe4d6465d7ef.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/movix.webp",
       "contentLanguage": [
@@ -915,8 +889,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/mugiwarastream--nuvio--80b578234a536bb8.js",
-      "enabled": true,
+      "filename": "../providers/mugiwarastream-9e99fe9e36d1f741.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/mugiwarastream.webp",
       "contentLanguage": [
         "fr"
@@ -946,8 +920,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/nakios--nuvio--1ce8edd473a95cae.js",
-      "enabled": true,
+      "filename": "../providers/nakios-01db709aaba737ef.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/nakios.webp",
       "contentLanguage": [
         "fr",
@@ -966,35 +940,6 @@
       ]
     },
     {
-      "id": "NEKO-SAMA",
-      "name": "🐱 Neko-Sama",
-      "description": "Anime VF et VOSTFR en streaming sur animes-sama.su (via neko-sama.lol).",
-      "version": "0.0.32",
-      "author": "Gowaru",
-      "supportedTypes": [
-        "anime",
-        "tv",
-        "series"
-      ],
-      "filename": "../providers/neko-sama--nuvio--92f110ee81c16a21.js",
-      "enabled": true,
-      "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/neko-sama.webp",
-      "contentLanguage": [
-        "fr"
-      ],
-      "formats": [
-        "mp4",
-        "m3u8"
-      ],
-      "limited": false,
-      "disabledPlatforms": [],
-      "supportsExternalPlayer": false,
-      "canonicalSupportedTypes": [
-        "anime",
-        "tv"
-      ]
-    },
-    {
       "id": "PAPADUSTREAM",
       "name": "🍿 Papadustream",
       "description": "Films et séries TV en streaming HLS via Papadustream.",
@@ -1006,8 +951,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/papadustream--nuvio--e8efa50a9456a32d.js",
-      "enabled": true,
+      "filename": "../providers/papadustream-e0c1e2e71e2dd6a4.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/papadustream.webp",
       "contentLanguage": [
         "fr",
@@ -1036,8 +981,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/peachify--nuvio--3715a1dc731693b5.js",
-      "enabled": true,
+      "filename": "../providers/peachify-cbeda13a278d12f7.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "m3u8",
@@ -1068,7 +1013,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/playimdb--nuvio--27e855fd8ed68dbf.js",
+      "filename": "../providers/playimdb-e1423cbf562c10d0.js",
       "enabled": true,
       "hasSettings": true,
       "formats": [
@@ -1099,8 +1044,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/sekai--nuvio--15a299a0c8ac88c5.js",
-      "enabled": true,
+      "filename": "../providers/sekai-9d0e4942b0644bf7.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/sekai.webp",
       "contentLanguage": [
         "fr"
@@ -1128,8 +1073,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/streamflix--nuvio--b54d43f978596b24.js",
-      "enabled": true,
+      "filename": "../providers/streamflix-075dd3268d36b066.js",
+      "enabled": false,
       "formats": [
         "mkv"
       ],
@@ -1156,8 +1101,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/streamzo--nuvio--abf2ec75cf133cda.js",
-      "enabled": true,
+      "filename": "../providers/streamzo-1162c6e774844f89.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/streamzo.webp",
       "contentLanguage": [
         "fr"
@@ -1186,8 +1131,8 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/toflix--nuvio--4967b63161d8f50d.js",
-      "enabled": true,
+      "filename": "../providers/toflix-c04e393150b717ca.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -1216,7 +1161,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/videasy--nuvio--73881ee0d8277636.js",
+      "filename": "../providers/videasy-59f710ef6757d7d1.js",
       "enabled": true,
       "hasSettings": true,
       "formats": [
@@ -1244,8 +1189,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidfast--nuvio--21a047cac9cbeecf.js",
-      "enabled": true,
+      "filename": "../providers/vidfast-0159e1bb68b11ab1.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -1272,8 +1217,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidlink--nuvio--f8862f99af1185c4.js",
-      "enabled": true,
+      "filename": "../providers/vidlink-16a7cb8da0268bf4.js",
+      "enabled": false,
       "hasSettings": true,
       "formats": [
         "mp4",
@@ -1300,8 +1245,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidrock--nuvio--1c9ec48c22b00aa1.js",
-      "enabled": true,
+      "filename": "../providers/vidrock-58f5839f3e40be8d.js",
+      "enabled": false,
       "hasSettings": false,
       "formats": [
         "mp4",
@@ -1329,8 +1274,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vostfree--nuvio--5487da1136e85ef3.js",
-      "enabled": true,
+      "filename": "../providers/vostfree-d03a5f7cf7d7793f.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/vostfree.webp",
       "contentLanguage": [
         "fr"
@@ -1358,8 +1303,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/wookafr--nuvio--dd401fa1279f885f.js",
-      "enabled": true,
+      "filename": "../providers/wookafr-89efec587201aa04.js",
+      "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/wookafr.webp",
       "contentLanguage": [
         "fr"
@@ -1387,8 +1332,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/yflix--nuvio--375542e1f4b26d25.js",
-      "enabled": true,
+      "filename": "../providers/yflix-1e5336901bc99b95.js",
+      "enabled": false,
       "limited": true,
       "formats": [
         "m3u8",
@@ -1415,7 +1360,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/1shows--nuvio--66a16a8fcc368f91.js",
+      "filename": "../providers/1shows-6104f30f1922a92b.js",
       "enabled": false,
       "hasSettings": false,
       "formats": [
@@ -1445,8 +1390,8 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/allwish--nuvio--7f9c0ed02e293dfb.js",
-      "enabled": false,
+      "filename": "../providers/allwish-fee030db2a08f62d.js",
+      "enabled": true,
       "hasSettings": true,
       "limited": true,
       "formats": [
@@ -1475,7 +1420,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/cinefreak--nuvio--3e861fd4be48320f.js",
+      "filename": "../providers/cinefreak-499c5d90f8e02e83.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1502,7 +1447,7 @@
       "supportedTypes": [
         "movie"
       ],
-      "filename": "../providers/cinevibe--nuvio--da05f2246986b689.js",
+      "filename": "../providers/cinevibe-22b449871f19ad72.js",
       "enabled": false,
       "formats": [
         "mp4",
@@ -1525,7 +1470,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/ctgmovies--nuvio--88ee3671fbf1dd5f.js",
+      "filename": "../providers/ctgmovies-9b5c2db7e13f9a8b.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1555,7 +1500,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/dvdplay--nuvio--318acd47b14ecb67.js",
+      "filename": "../providers/dvdplay-a34cae3044145818.js",
       "enabled": false,
       "formats": [
         "mkv"
@@ -1583,7 +1528,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/einthusan--nuvio--ae49faa1b0f35753.js",
+      "filename": "../providers/einthusan-19ce8d0b4c2aa3ed.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1615,7 +1560,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/fibwatch--nuvio--a2a030b2fa0a0c17.js",
+      "filename": "../providers/fibwatch-dc223b07087ca7ff.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1646,7 +1591,7 @@
         "anime",
         "series"
       ],
-      "filename": "../providers/frenchstream--nuvio--0d8db90c6e4a3670.js",
+      "filename": "../providers/frenchstream-2a9ea5a6bed13200.js",
       "enabled": false,
       "logo": "https://raw.githubusercontent.com/niakw/NiakVIO/main/assets/providers/96x96/frenchstream.webp",
       "contentLanguage": [
@@ -1675,7 +1620,7 @@
       "supportedTypes": [
         "movie"
       ],
-      "filename": "../providers/goatapi--nuvio--e87bad295ef451fe.js",
+      "filename": "../providers/goatapi-ade787ede49c13a9.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1700,7 +1645,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/gramcinema--nuvio--27d9b301327732f8.js",
+      "filename": "../providers/gramcinema-fb98a25172fb8ea6.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1731,7 +1676,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/kisskh--nuvio--cbc6138dd474d7c4.js",
+      "filename": "../providers/kisskh-c3b36c7c235b5160.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1760,7 +1705,7 @@
       "supportedTypes": [
         "movie"
       ],
-      "filename": "../providers/mallumv--nuvio--1f1f8b4a6757d901.js",
+      "filename": "../providers/mallumv-15a7f49bc9218579.js",
       "enabled": false,
       "formats": [
         "mkv",
@@ -1787,7 +1732,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/moonflix--nuvio--eeab13c5c178b7e9.js",
+      "filename": "../providers/moonflix-197b5105be8fc6a3.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1816,7 +1761,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/moviebox--nuvio--cc5850d059a3dac6.js",
+      "filename": "../providers/moviebox-f1414fd1ee6270ca.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1848,7 +1793,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/mycima--nuvio--ceb71227d061ffbf.js",
+      "filename": "../providers/mycima-d0623c7db1a4aa11.js",
       "enabled": false,
       "formats": [
         "mp4",
@@ -1876,7 +1821,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/netmirror--nuvio--9203af125e2296ee.js",
+      "filename": "../providers/netmirror-112ae0554ec1122c.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1908,7 +1853,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/onlykdrama--nuvio--4b36267e97eec0e7.js",
+      "filename": "../providers/onlykdrama-80169bcf6b7963b8.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1937,7 +1882,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/showbox--nuvio--9ad52e53781ccbeb.js",
+      "filename": "../providers/showbox-ea036f5f73b29600.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1966,7 +1911,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/topcartoons--nuvio--50863bafbfa90263.js",
+      "filename": "../providers/topcartoons-10c14ac2ec94d2d6.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -1994,7 +1939,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidlove--nuvio--fe97d860d74f3704.js",
+      "filename": "../providers/vidlove-b43e7626bc745704.js",
       "enabled": false,
       "hasSettings": false,
       "formats": [
@@ -2023,7 +1968,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidnest--nuvio--4dec00e7b99a4745.js",
+      "filename": "../providers/vidnest-c2a9ba8c956c1bec.js",
       "enabled": false,
       "formats": [
         "mp4",
@@ -2050,7 +1995,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vidsrc--nuvio--8cd4a853213cfae6.js",
+      "filename": "../providers/vidsrc-cbd74b685edaf82d.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -2078,7 +2023,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/vixsrc--nuvio--f2fd437fa57947c6.js",
+      "filename": "../providers/vixsrc-9d770b0f00babd98.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [
@@ -2107,7 +2052,7 @@
         "tv",
         "series"
       ],
-      "filename": "../providers/xpass--nuvio--2c50487526ee4ac5.js",
+      "filename": "../providers/xpass-b022b294feaa8177.js",
       "enabled": false,
       "hasSettings": true,
       "formats": [

@@ -63,17 +63,36 @@ def parse_probe(stdout: str) -> dict[str, Any] | None:
 def build_tasks() -> tuple[list[dict[str, Any]], int]:
     manifest = load(MANIFEST)
     corpus = load(CORPUS)
-    fixture_rows = {
-        str(row.get("slug") or ""): row.get("fixture")
+    fixture_records = {
+        str(row.get("slug") or ""): row
         for row in corpus.get("fixtures") or []
         if isinstance(row, dict) and isinstance(row.get("fixture"), dict)
     }
+    fixture_rows = {slug: row["fixture"] for slug, row in fixture_records.items()}
     fixtures: dict[str, dict[str, Any]] = {}
     for media_type, slug in REPRESENTATIVE.items():
         fixture = fixture_rows.get(slug)
         if not isinstance(fixture, dict):
             raise RuntimeError(f"missing representative fixture {slug}")
         fixtures[media_type] = fixture
+
+    # Anime catalogues may legitimately expose a movie lane for anime films.
+    # That lane must be proven with the corpus-owned animeMovie fixture rather
+    # than a generic movie such as Interstellar; otherwise semantic/transport
+    # separation is violated and healthy anime-film lanes are false-negative.
+    anime_movie_records = [
+        row for row in fixture_records.values()
+        if isinstance(row.get("fixture"), dict) and row["fixture"].get("animeMovie") is True
+    ]
+    if len(anime_movie_records) != 1:
+        raise RuntimeError(f"expected exactly one animeMovie representative fixture, got {len(anime_movie_records)}")
+    anime_movie_record = anime_movie_records[0]
+    anime_movie_fixture = anime_movie_record["fixture"]
+    anime_movie_providers = {
+        str(value or "").strip().casefold()
+        for value in (anime_movie_record.get("providers") or [])
+        if str(value or "").strip()
+    }
 
     tasks: list[dict[str, Any]] = []
     providers = 0
@@ -86,12 +105,17 @@ def build_tasks() -> tuple[list[dict[str, Any]], int]:
             continue
         providers += 1
         for media_type in semantic_types(row):
+            fixture = (
+                anime_movie_fixture
+                if media_type == "movie" and provider_id in anime_movie_providers
+                else fixtures[media_type]
+            )
             tasks.append({
                 "provider_id": provider_id,
                 "provider_name": str(row.get("name") or row.get("id") or provider_id),
                 "filename": filename,
                 "semantic_type": media_type,
-                "fixture": fixtures[media_type],
+                "fixture": fixture,
             })
     return tasks, providers
 

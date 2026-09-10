@@ -1,15 +1,11 @@
 {
-  "schemaVersion": 2,
-  "requestedAt": "2026-09-07T22:58:00+02:00",
-  "retry": 7,
+  "schemaVersion": 3,
+  "requestedAt": "2026-09-10T10:17:00+02:00",
+  "retry": 16,
   "mode": "repair",
-  "scope": "targeted-v13.2-typed-recipe-sanitizer-with-whole-portfolio-preservation",
-  "targetProviders": [
-    "animekai",
-    "movies4u",
-    "papadustream",
-    "frenchstream"
-  ],
-  "goal": "validate inherited typed recipe sanitizer, preserve every baseline-positive provider, block new wrong-content, and retain V13.2 target gains",
-  "branch": "workbench/route-recognition-v6"
+  "scope": "full-unresolved-portfolio-with-four-version-and-live-lane-preservation",
+  "targetProviders": [],
+  "goal": "Final authoritative full systemic Repair V6 after semantic/transport reconciliation, deterministic 96/96 rematerialization, workspace/publication audit reconciliation, and VidEasy identity-safe endpoint correction: canonical semantics stay movie/tv/anime, episodic anime/tv transport keeps tv+series, movie is never manufactured for anime-only, VidEasy Nitrogen/m4uhd remains recognition evidence only and is not executable, complete capability proof may re-enable providers, unresolved upstream-positive lanes remain explicitly audited repair/off debt, rolling live lanes and the exact four-version non-regression floor remain blocking before merge.",
+  "branch": "workbench/systemic-recovery-20260909",
+  "publication": false
 }

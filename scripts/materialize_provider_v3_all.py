@@ -125,6 +125,15 @@ def identity_input(
     routes: list[str] | None = None,
     api_recipe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    # PROVIDER_TYPED_RESOLVER_IDENTITY_V8
+    # Fresh terminal stream proof for a typed TMDB resolver is stronger than
+    # stale catalogue/search routes carried as historical candidate knowledge.
+    if isinstance(api_recipe, dict) and str(api_recipe.get("recipeKind") or "") == "typed-resolver-api":
+        return {
+            "mode": "tmdb_direct",
+            "requiresTmdbBeforeRun": False,
+            "requiredFields": ["tmdbId", "mediaType"],
+        }
     raw = patch.get("identity_input")
     if not isinstance(raw, dict):
         mode = _identity_mode_from_plan(list(routes or []), api_recipe)
@@ -159,6 +168,38 @@ def identity_input(
             else ["tmdbId", "mediaType"]
         ),
     }
+
+
+# NIAKVIO_PROVIDER_SOURCE_PLAN_V10
+def _runtime_domain_substitutions(patch: dict[str, Any], static_model: dict[str, Any] | None = None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    # PROVIDER_SEARCH_REQUEST_PLAN_V14: current positive HTTP proof outranks stale
+    # historical replacement knowledge for runtime execution.
+    protected = {
+        str(value or "").strip().casefold()
+        for value in [
+            *(patch.get("proof_protected_hosts") or []),
+            *((static_model or {}).get("proofProtectedHosts") or []),
+        ]
+        if str(value or "").strip()
+    }
+    # runtime_domain_replacements is explicit execution DATA. Historical generic
+    # replacements remain candidate knowledge unless already promoted there.
+    # NIAKVIO_PROVIDER_RUNTIME_DOMAIN_AUTHORITY_V10_1: candidate/history maps are non-executable knowledge.
+    for key in ("runtime_domain_replacements",):
+        mapping = patch.get(key)
+        if not isinstance(mapping, dict):
+            continue
+        for source, target in mapping.items():
+            old = str(source or "").strip().casefold()
+            new = str(target or "").strip().casefold()
+            if "://" in old:
+                old = (urlparse(old).hostname or "").casefold()
+            if "://" in new:
+                new = (urlparse(new).hostname or "").casefold()
+            if old and new and old not in protected:
+                out[old] = new
+    return out
 
 
 def provider_model(
@@ -229,38 +270,86 @@ def provider_model(
         "routes": routes,
         "apiRecipe": api_recipe,
         "routeProofVersion": proof_version,
+        "proofSearchBases": [
+            str(value).strip()
+            for value in (patch.get("proof_search_bases") or static_model.get("proofSearchBases") or [])
+            if str(value).strip()
+        ][:6],
+        # PROVIDER_EXTERNAL_IDENTITY_BASE_V11
+        "proofDetailBases": [
+            str(value).strip()
+            for value in (patch.get("proof_detail_bases") or static_model.get("proofDetailBases") or [])
+            if str(value).strip()
+        ][:6],
+        # PROVIDER_SEARCH_REQUEST_PLAN_V14
+        "proofProtectedHosts": [
+            str(value).strip().casefold()
+            for value in (patch.get("proof_protected_hosts") or static_model.get("proofProtectedHosts") or [])
+            if str(value).strip()
+        ][:24],
+        "searchRequestPlan": [
+            dict(row)
+            for row in (patch.get("search_request_plan") or static_model.get("searchRequestPlan") or [])
+            if isinstance(row, dict)
+        ][:6],
+        # PROVIDER_RESPONSE_VALUE_CORRELATION_V20
+        # PROVIDER_CORRELATED_VALUE_PLAN_V18
+        # PROVIDER_VALUE_CAUSAL_DEPTH_V20_5
+        "providerValuePlan": [
+            dict(row)
+            for row in (patch.get("provider_value_plan") or static_model.get("providerValuePlan") or [])
+            if isinstance(row, dict)
+        ][:12],
+        # PROVIDER_STRUCTURED_EXTERNAL_ID_V13
+        "externalIdentityPlan": [
+            dict(row)
+            for row in (patch.get("external_identity_plan") or static_model.get("externalIdentityPlan") or [])
+            if isinstance(row, dict)
+        ][:4],
         "sourceRuntimeFamily": str(static_model.get("sourceRuntimeFamily") or "unknown"),
         "identityInput": identity_input(patch, routes, api_recipe),
         "strictIdentity": bool(patch.get("strict_identity", False)),
         "strictHtmlIdentity": bool(patch.get("strict_html_identity", False)),
         "outputUrlHostRewrites": patch.get("output_url_host_rewrites") or [],
         "outputLanguageRules": patch.get("output_language_rules") or [],
-        "domainSubstitutions": patch.get("domain_substitutions") or {},
+        "domainSubstitutions": _runtime_domain_substitutions(patch, static_model),
     }
 
 
 def normalize_anime_transport_compatibility(entry: dict[str, Any]) -> bool:
-    """Preserve explicit anime semantics while exposing Nuvio TV/movie launch lanes."""
+    """Project canonical media capability onto Nuvio transport aliases."""
     canonical = []
-    for value in entry.get("canonicalSupportedTypes") or []:
+    source = entry.get("canonicalSupportedTypes") or entry.get("supportedTypes") or []
+    for value in source:
         item = str(value or "").strip().casefold()
         if item in {"movie", "tv", "anime"} and item not in canonical:
             canonical.append(item)
-    if "anime" not in canonical:
+    if not canonical:
         return False
+
     wanted = list(canonical)
-    for compatible in ("tv", "movie"):
-        if compatible not in wanted:
-            wanted.append(compatible)
-    current = [
+    if "anime" in canonical and "tv" not in wanted:
+        wanted.append("tv")
+    if "tv" in wanted and "series" not in wanted:
+        wanted.append("series")
+
+    current = []
+    for value in entry.get("supportedTypes") or []:
+        item = str(value or "").strip().casefold()
+        if item in {"movie", "tv", "anime", "series"} and item not in current:
+            current.append(item)
+
+    before_canonical = [
         str(value or "").strip().casefold()
-        for value in entry.get("supportedTypes") or []
+        for value in entry.get("canonicalSupportedTypes") or []
         if str(value or "").strip().casefold() in {"movie", "tv", "anime"}
     ]
-    if current == wanted and entry.get("canonicalSupportedTypes") == canonical:
+    if current == wanted and before_canonical == canonical:
         return False
-    entry["canonicalSupportedTypes"] = canonical
+
     entry["supportedTypes"] = wanted
+    if wanted != canonical or "canonicalSupportedTypes" in entry:
+        entry["canonicalSupportedTypes"] = canonical
     return True
 
 

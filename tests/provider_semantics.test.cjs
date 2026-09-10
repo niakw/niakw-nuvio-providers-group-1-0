@@ -11,11 +11,11 @@ const hianime = {
     id: 'HIANIME',
     name: 'HiAnime',
     description: 'Anime catalogue',
-    supportedTypes: ['anime', 'movie', 'tv'],
+    supportedTypes: ['anime', 'tv', 'series'],
     canonicalSupportedTypes: ['anime'],
   },
 };
-assert.deepEqual(inferSupportedTypes(hianime), ['movie', 'anime']);
+assert.deepEqual(inferSupportedTypes(hianime), ['anime']);
 assert.equal(isAnimeFocusedCatalogue(hianime), true);
 
 const animeSama = {
@@ -24,7 +24,7 @@ const animeSama = {
     id: 'anime-sama',
     name: 'Anime-Sama',
     description: 'Anime catalogue',
-    supportedTypes: ['movie', 'anime', 'tv'],
+    supportedTypes: ['movie', 'anime', 'tv', 'series'],
     canonicalSupportedTypes: ['movie', 'anime'],
   },
 };
